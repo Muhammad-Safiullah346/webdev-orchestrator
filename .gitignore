@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Build / TS
+dist/
+*.tsbuildinfo
+
+# Per-run workflow state (project-local build artifacts)
+.workflow/
+
+# Local machine settings (never publish)
+.claude/settings.local.json
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.DS_Store
+*.log
+.idea/
+.vscode/

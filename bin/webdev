@@ -1,0 +1,53 @@
+#!/usr/bin/env node
+// webdev — multi-agent web-development orchestrator (Claude Agent SDK).
+//
+// Launcher: runs the TypeScript CLI through tsx with no build step. Resolves tsx
+// through Node's module resolution (robust for `npm i -g`, `npx`, and clones)
+// rather than a hardcoded relative path, then invokes it with the node binary so
+// it works regardless of executable bits or platform shims.
+import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+import { existsSync } from "node:fs";
+
+const require = createRequire(import.meta.url);
+const here = dirname(fileURLToPath(import.meta.url));
+const cliEntry = resolve(here, "..", "src", "cli.ts");
+
+function resolveTsxCli() {
+  // Preferred: resolve tsx's own CLI entry via its package manifest.
+  try {
+    const pkgPath = require.resolve("tsx/package.json");
+    const pkg = require("tsx/package.json");
+    const binRel = typeof pkg.bin === "string" ? pkg.bin : pkg.bin?.tsx;
+    if (binRel) {
+      const cli = resolve(dirname(pkgPath), binRel);
+      if (existsSync(cli)) return cli;
+    }
+  } catch { /* fall through */ }
+  // Fallback: the .bin shim next to the package.
+  const shim = resolve(here, "..", "node_modules", ".bin", "tsx");
+  return existsSync(shim) ? shim : null;
+}
+
+const tsxCli = resolveTsxCli();
+if (!tsxCli) {
+  console.error(
+    "[webdev] Could not find the 'tsx' runtime.\n" +
+    "  • If you cloned the repo: run `npm install` in the harness directory.\n" +
+    "  • If you installed globally: reinstall with `npm install -g webdev-orchestrator`.",
+  );
+  process.exit(1);
+}
+
+// Invoke node directly on the tsx CLI script — most portable across platforms.
+const child = spawn(process.execPath, [tsxCli, cliEntry, ...process.argv.slice(2)], {
+  stdio: "inherit",
+  env: process.env,
+});
+child.on("exit", (code, signal) => process.exit(signal ? 1 : (code ?? 0)));
+child.on("error", (err) => {
+  console.error("[webdev] failed to launch:\n", err);
+  process.exit(1);
+});

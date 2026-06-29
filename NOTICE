@@ -1,0 +1,45 @@
+webdev-orchestrator
+Copyright (c) 2026 Muhammad Safiullah
+Licensed under the MIT License (see LICENSE).
+
+================================================================================
+THIRD-PARTY COMPONENTS
+================================================================================
+
+This project bundles a "design suite" of third-party Claude Code skills under
+`.claude/skills/`. They are redistributed here, with attribution, under their
+respective open-source licenses. All credit for these skills belongs to their
+original authors.
+
+--------------------------------------------------------------------------------
+ui-ux-pro-max
+--------------------------------------------------------------------------------
+  Author:  nextlevelbuilder
+  Source:  https://github.com/nextlevelbuilder/ui-ux-pro-max-skill
+  License: MIT
+  (The LICENSE file was not present in the downloaded copy; the upstream
+   repository is MIT-licensed. The MIT terms in this project's LICENSE apply.)
+
+--------------------------------------------------------------------------------
+design-system
+--------------------------------------------------------------------------------
+  Author:  claudekit
+  License: MIT
+
+--------------------------------------------------------------------------------
+brand
+--------------------------------------------------------------------------------
+  Author:  claudekit
+  License: MIT
+
+--------------------------------------------------------------------------------
+ui-styling
+--------------------------------------------------------------------------------
+  Author:  claudekit
+  License: Apache License 2.0
+  Full text: .claude/skills/ui-styling/LICENSE.txt
+
+================================================================================
+If you are the author of any bundled component and would prefer it not be
+redistributed here, please open an issue and it will be removed promptly.
+================================================================================
