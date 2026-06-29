@@ -1,6 +1,6 @@
 {
   "name": "webdev-orchestrator",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Multi-agent web-development workflow on the Claude Agent SDK. Real isolated subagents, deterministic PM orchestration, file-based memory, per-role model lanes, and an anti-slop design layer. Works in any project: greenfield, iteration, bugfix, refactor, UI polish, migration, audit.",
   "type": "module",
   "bin": {
@@ -66,4 +66,3 @@
     "esbuild@0.28.1": true
   }
 }
-
