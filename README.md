@@ -1,10 +1,10 @@
 # webdev — multi-agent web-development orchestrator
 
-A Claude Agent SDK harness that builds web apps with a **team of real, isolated subagents** driven by a **deterministic PM** — not one model role-playing a whole team. It replaces the `turkey-build` / `auto-app-builder` skill, swaps `aimem` for a **file-based memory** system, and wires an **anti-slop design layer** through the claudekit design suite so the output looks like a $10,000 site, not generic AI slop.
+A Claude Agent SDK harness that builds web apps with a **team of real, isolated subagents** driven by a **deterministic PM** — not one model role-playing a whole team. It replaces the [turkey-build](https://github.com/rangerchaz/turkey-build) / `auto-app-builder` skill, swaps `aimem` for a **file-based memory** system, and wires an **anti-slop design layer** through the claudekit design suite so the output looks like a $10,000 site, not generic AI slop.
 
 ## Why this exists
 
-`turkey-build`'s "agents" are markdown files the single main model reads and *role-plays* sequentially — no context isolation, no real parallelism, quality degrades, slop ships. This harness uses the SDK's `agents` (real `AgentDefinition`s): each agent runs as its **own `query()`** with a fresh context, scoped tools, and the right model, while the orchestrator — **plain TypeScript** — owns the control flow (phase order, parallel waves, retries, quality gate). The model never decides the workflow.
+[`turkey-build`](https://github.com/rangerchaz/turkey-build)'s "agents" are markdown files the single main model reads and *role-plays* sequentially — no context isolation, no real parallelism, quality degrades, slop ships. This harness uses the SDK's `agents` (real `AgentDefinition`s): each agent runs as its **own `query()`** with a fresh context, scoped tools, and the right model, while the orchestrator — **plain TypeScript** — owns the control flow (phase order, parallel waves, retries, quality gate). The model never decides the workflow.
 
 ```
 discovery → [feature waves: designer→backend→frontend→docs/devops] (parallel, dependency-ordered)
@@ -63,6 +63,8 @@ npm link                                # or expose `webdev` globally from the c
 
 ## Usage
 
+The core command is `webdev "<what to build>"`. Run it from inside any project directory:
+
 ```bash
 webdev "build a markdown note app with tags and search"        # greenfield (auto-detected)
 webdev "add dark mode and CSV export" -m iteration -t ./notes  # iteration
@@ -70,6 +72,18 @@ webdev "login returns 500 after the migration" -m bugfix       # bugfix
 webdev "make the landing page premium, not generic" -m ui-polish
 webdev "review this codebase for security + perf" -m audit
 ```
+
+### Commands
+
+| Command | What it does |
+|---------|--------------|
+| `webdev "<request>"` | Build/modify a project (the main command; mode auto-detected) |
+| `webdev setup` | One-time onboarding: install the design suite into `~/.claude/skills`, then run the preflight |
+| `webdev doctor` | Check the environment is ready (Node, auth, git, Python, design suite) |
+| `webdev install-skills` | (Re)install just the bundled design suite into `~/.claude/skills` |
+| `webdev models` | Print the resolved lane→model map |
+| `webdev models --probe` | Test which model IDs your provider actually accepts |
+| `webdev --help` | Full usage and flag reference |
 
 ### Modes (same engine, different phase plan)
 
@@ -87,7 +101,18 @@ Mode is auto-detected from your request and whether the target already has code;
 
 ### Options
 
-`-t/--target <dir>` · `-p/--preset <balanced|diverse|solo>` · `--model-<lane> <id>` (per-lane override) · `--model <id>` (all lanes; only with `--preset solo`) · `--threshold <1-100>` (default 98) · `-c/--concurrency <n>` · `--fast` (skip E2E + visual-QA) · `--no-git` · `-y/--yes` (non-interactive).
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-m, --mode <mode>` | auto-detected | Force a mode (see table above) |
+| `-t, --target <dir>` | current dir | Project directory to build in (created if missing) |
+| `-p, --preset <name>` | `balanced` | Model preset: `balanced`, `diverse`, or `solo` |
+| `--model-<lane> <id>` | — | Override one lane's model (e.g. `--model-build`, `--model-review`) |
+| `--model <id>` | — | Single model for all lanes (only valid with `--preset solo`) |
+| `--threshold <1-100>` | `98` | Quality-gate score the conductor must reach to ship |
+| `-c, --concurrency <n>` | `3` | Max agents running in parallel per wave |
+| `--fast` | off | Skip the E2E + visual-QA phases for a quicker pass |
+| `--no-git` | off | Single-branch mode; skip git branch/merge orchestration |
+| `-y, --yes` | off | Non-interactive: auto-approve tool use, mock external secrets |
 
 ## Model lanes — independent models, independent blind spots
 
