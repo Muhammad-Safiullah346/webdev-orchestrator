@@ -32,6 +32,7 @@ Use the design suite (`~/.claude/skills/ui-ux-pro-max` → `brand` → `design-s
 - Tests must actually run. "Compiles" ≠ "works".
 - Render real data — never ship "Unknown"/placeholder/Lorem ipsum in the UI.
 - Commit with `type(agent): description` (feat/fix/docs/test/refactor/perf/ci).
+- Commit messages must contain ONLY the human-readable description. Never add a `Co-Authored-By:` trailer, an AI/assistant/tool attribution, a "Generated with" line, or any similar credit. Commits are authored solely by the project owner.
 
 ## Git flow
 - `feature/*` → merge to `develop`. `bugfix/*` for any failure. `main` only receives tagged releases.

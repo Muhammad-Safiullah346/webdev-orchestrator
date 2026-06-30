@@ -36,12 +36,28 @@ export function seedTargetClaude(target: string): void {
     }
   }
 
-  // Seed a CLAUDE.md only if absent (don't overwrite a project's own).
+  // CLAUDE.md: copy the harness one if the project has none. If the project
+  // already has its own, leave it intact but append our commit-attribution rule
+  // once (idempotent) — agents load the TARGET's CLAUDE.md, so the rule must be
+  // present there regardless of whether we authored the file.
   const destClaudeMd = join(destClaude, "CLAUDE.md");
   if (!existsSync(destClaudeMd)) {
     cpSync(join(HARNESS_CLAUDE, "CLAUDE.md"), destClaudeMd);
+  } else {
+    const current = readFileSync(destClaudeMd, "utf8");
+    if (!current.includes(COMMIT_RULE_MARKER)) {
+      writeFileSync(destClaudeMd, current.replace(/\s*$/, "") + "\n\n" + COMMIT_RULE_BLOCK + "\n", "utf8");
+    }
   }
 }
+
+const COMMIT_RULE_MARKER = "<!-- webdev:commit-attribution -->";
+const COMMIT_RULE_BLOCK =
+  `${COMMIT_RULE_MARKER}\n` +
+  `## Commit attribution (enforced)\n` +
+  `- Commit messages must contain ONLY the human-readable description. Never add a ` +
+  `\`Co-Authored-By:\` trailer, an AI/assistant/tool attribution, a "Generated with" line, ` +
+  `or any similar credit. Commits are authored solely by the project owner.`;
 
 function mergePermissions(a: any, b: any): any {
   const out = { allow: [], deny: [], ...(a ?? {}) };
