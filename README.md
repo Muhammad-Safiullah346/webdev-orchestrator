@@ -166,7 +166,6 @@ The designer **must** run the design suite design-system-first (`ui-ux-pro-max -
 - `hooks/secret-guard.mjs` — PreToolUse: blocks destructive shell commands + hardcoded secrets.
 - `hooks/design-lint.mjs` — PostToolUse: warns on the slop fingerprint in written CSS/JSX.
 - `CLAUDE.md` — rules every agent inherits.
-- `agents/*.md` — filesystem mirror of the 14 agents (regenerate with `npx tsx src/gen-agents.ts`).
 - `skills/` — the bundled claudekit design suite (installed to `~/.claude/skills` via `install-skills`).
 
 During a build the orchestrator seeds the target project's `.claude/` with the hooks so the gates fire there too.
@@ -193,8 +192,7 @@ src/
   seed.ts          # seeds target .claude with hooks
   types.ts         # shared types
   prompts/*.md     # the 14 agent system prompts (anti-slop baked in)
-  gen-agents.ts    # regenerates .claude/agents/*.md from prompts
-.claude/           # settings, hooks, CLAUDE.md, agents mirror, design suite
+.claude/           # settings, hooks, CLAUDE.md, design suite
 bin/webdev         # launcher (resolves tsx, runs src/cli.ts)
 ```
 

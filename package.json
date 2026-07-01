@@ -17,13 +17,11 @@
     "doctor": "tsx src/cli.ts doctor",
     "setup": "tsx src/cli.ts setup",
     "typecheck": "tsc --noEmit",
-    "gen-agents": "tsx src/gen-agents.ts",
     "install-skills": "tsx src/cli.ts install-skills",
     "release": "node scripts/release.mjs patch",
     "release:minor": "node scripts/release.mjs minor",
     "release:major": "node scripts/release.mjs major",
     "preversion": "npm run typecheck",
-    "version": "npm run gen-agents && git add .claude/agents",
     "postversion": "git push --follow-tags",
     "prepublishOnly": "npm run typecheck"
   },

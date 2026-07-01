@@ -7,7 +7,6 @@
 //
 // `npm version` (invoked below) fires the lifecycle hooks in package.json:
 //   preversion  → typecheck            (abort before bumping if the build is broken)
-//   version     → regenerate agents mirror + stage it (keep generated files in sync)
 //   postversion → git push --follow-tags  (commit + tag land on GitHub)
 // then `npm publish` fires prepublishOnly → typecheck again as a final gate.
 //
