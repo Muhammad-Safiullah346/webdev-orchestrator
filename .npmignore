@@ -1,0 +1,6 @@
+# Python bytecode from design-suite scripts (regenerated at runtime)
+__pycache__/
+*.pyc
+# workflow/run artifacts
+.workflow/
+*.log
