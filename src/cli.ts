@@ -12,7 +12,7 @@
 // user runs a local proxy (base http://localhost:8000), so we don't override
 // those unless they're entirely missing.
 
-import { cpSync, existsSync, mkdirSync, readdirSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -110,7 +110,13 @@ function installSkills(): void {
   mkdirSync(dest, { recursive: true });
   const skills = readdirSync(src, { withFileTypes: true }).filter((d) => d.isDirectory());
   for (const s of skills) {
-    cpSync(join(src, s.name), join(dest, s.name), { recursive: true });
+    const target = join(dest, s.name);
+    // Clean mirror: remove the existing skill dir first so files deleted from
+    // the bundle (e.g. non-web stacks) don't linger as orphans. Only the skill
+    // dirs we manage are touched — unrelated skills in ~/.claude/skills are left
+    // alone.
+    rmSync(target, { recursive: true, force: true });
+    cpSync(join(src, s.name), target, { recursive: true });
     console.log(`  ✓ ${s.name}`);
   }
   console.log(`\nInstalled ${skills.length} design-suite skill(s) into ${dest}`);

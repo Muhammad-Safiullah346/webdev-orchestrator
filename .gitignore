@@ -21,3 +21,7 @@ dist/
 *.log
 .idea/
 .vscode/
+
+# Python bytecode from design-suite scripts
+__pycache__/
+*.pyc

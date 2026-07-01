@@ -87,7 +87,6 @@ No,Product Type,Primary,On Primary,Secondary,On Secondary,Accent,On Accent,Backg
 86,Biohacking / Longevity App,#FF4D4D,#FFFFFF,#4D94FF,#FFFFFF,#059669,#FFFFFF,#F5F5F7,#1C1C1E,#FFFFFF,#1C1C1E,#F2EEF2,#64748B,#E5E5EA,#DC2626,#FFFFFF,#FF4D4D,Bio red/blue + vitality green [Accent adjusted from #00E676 for WCAG 3:1]
 87,Autonomous Drone Fleet Manager,#00FF41,#0F172A,#008F11,#FFFFFF,#FF3333,#FFFFFF,#0D1117,#E6EDF3,#182424,#E6EDF3,#25292F,#94A3B8,#30363D,#EF4444,#FFFFFF,#00FF41,Terminal green + alert red
 88,Generative Art Platform,#18181B,#FFFFFF,#3F3F46,#FFFFFF,#EC4899,#FFFFFF,#FAFAFA,#09090B,#FFFFFF,#09090B,#E8ECF0,#64748B,#E4E4E7,#DC2626,#FFFFFF,#18181B,Canvas neutral + creative pink
-89,Spatial Computing OS / App,#FFFFFF,#0F172A,#E5E5E5,#0F172A,#FFFFFF,#0F172A,#888888,#000000,#999999,#000000,#777777,#D4D4D4,#CCCCCC,#FF3B30,#FFFFFF,#007AFF,Glass white + system blue [Accent adjusted from #007AFF for WCAG 3:1]
 90,Sustainable Energy / Climate Tech,#059669,#FFFFFF,#10B981,#0F172A,#059669,#FFFFFF,#ECFDF5,#064E3B,#FFFFFF,#064E3B,#E8F1F3,#64748B,#A7F3D0,#DC2626,#FFFFFF,#059669,Nature green + solar gold [Accent adjusted from #FBBF24 for WCAG 3:1]
 91,Personal Finance Tracker,#1E40AF,#FFFFFF,#3B82F6,#FFFFFF,#059669,#FFFFFF,#0F172A,#FFFFFF,#192134,#FFFFFF,#101A34,#94A3B8,"rgba(255,255,255,0.08)",#DC2626,#FFFFFF,#1E40AF,Trust blue + profit green on dark
 92,Chat & Messaging App,#2563EB,#FFFFFF,#6366F1,#FFFFFF,#059669,#FFFFFF,#FFFFFF,#0F172A,#FFFFFF,#0F172A,#F1F5FD,#64748B,#E4ECFC,#DC2626,#FFFFFF,#2563EB,Messenger blue + online green

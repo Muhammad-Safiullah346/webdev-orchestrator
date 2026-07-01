@@ -1,0 +1,121 @@
+No,Category,Guideline,Description,Do,Don't,Code Good,Code Bad,Severity,Docs URL
+1,Components,Wrap components in component$,The trailing $ lets the Optimizer code-split the component into an independently lazy-loadable chunk.,Declare components with component$ so Qwik lazy-loads children automatically.,Reference plain component functions that force the bundler to include the whole tree.,"export default component$(() => {
+  return <div>Hello World!</div>;
+});","export default function App() {
+  return <div>Hello World!</div>;
+}",High,https://qwik.dev/docs/components/overview/
+2,Components,Use export default for entry files,"Route and root entry files (index.tsx, layout.tsx, root.tsx) must be default exports.","Default-export index.tsx, layout.tsx, and root.tsx; use named exports for other components.",Use named exports for route entry files.,"// index.tsx
+export default component$(() => <Home />);","// index.tsx
+export const Index = component$(() => <Home />);",Medium,https://qwik.dev/docs/components/overview/
+3,Components,Do not attach dot-notation properties to components,Assigning properties to a component$ (Scene.Title = Title) does not work; use barrel or namespace exports.,Group related components with a barrel file or namespace export.,Attach sub-components as properties on a component$.,"// components/scene/index.ts
+export { SceneTitle as Title } from './scene-title';",Scene.Title = Title; // won't work,Medium,https://qwik.dev/docs/components/overview/
+4,Components,Keep component functions idempotent,A component may execute any number of times; renders are coalesced on requestAnimationFrame.,Write render logic with no side effects and never depend on execution count.,Trigger side effects or count executions inside the component body.,"export default component$(() => {
+  return <div>{count.value}</div>;
+});","let runs = 0;
+export default component$(() => {
+  runs++; // side effect on render
+  return <div>{runs}</div>;
+});",High,https://qwik.dev/docs/components/overview/
+5,Components,Use inline components sparingly for lightweight markup,Inline components are plain functions bundled with the parent and cannot use hooks or Slot.,Use inline components only for small stateless markup pieces.,Call use* hooks or project Slot content inside an inline component.,"export const MyButton = (props: { text: string }) => {
+  return <button>{props.text}</button>;
+};","export const MyButton = (props) => {
+  const s = useSignal(0); // not allowed inline
+  return <button>{s.value}</button>;
+};",Medium,https://qwik.dev/docs/components/overview/
+6,Props,Pass signals to change primitive props from a parent,"Props are shallowly immutable, so primitives cannot be reassigned once passed.",Use a Signal prop to let a parent update a primitive value reactively.,Try to mutate a primitive prop directly in the child.,"interface ItemProps { price?: Signal<number>; }
+export const Item = component$<ItemProps>((props) => {
+  return <li>{props.price?.value}</li>;
+});","export const Item = component$((props) => {
+  props.price = 5; // primitive prop is immutable
+  return <li />;
+});",High,https://qwik.dev/docs/components/overview/
+7,Props,Set default prop values with destructuring,JS destructuring defaults give props fallback values cleanly.,Destructure props with default values in the component signature.,Manually branch on undefined props throughout the body.,"export default component$<Props>(({enabled = true, placeholder = ''}) => {
+  return <input disabled={!enabled} placeholder={placeholder} />;
+});","export default component$<Props>((props) => {
+  const enabled = props.enabled === undefined ? true : props.enabled;
+  return <input disabled={!enabled} />;
+});",Low,https://qwik.dev/docs/components/overview/
+8,State,Prefer useSignal for single reactive values,useSignal holds one .value and re-renders dependents when it changes.,Use useSignal for a single reactive value like a counter.,Reach for useStore when a plain signal suffices.,"const count = useSignal(0);
+return <button onClick$={() => count.value++}>{count.value}</button>;","const state = useStore({ count: 0 });
+return <button onClick$={() => state.count++}>{state.count}</button>;",Low,https://qwik.dev/docs/components/state/
+9,State,Pass signal.value to read-only children,"Children that only read a value should receive the value, not the whole signal.",Pass signal.value to a child that only needs to read it.,Pass the entire signal when the child only reads it.,return <Child isClosed={isClosedSig.value} />;,return <Child isClosed={isClosedSig} />;,Medium,https://qwik.dev/docs/components/state/
+10,State,Keep a reference to the store object,Destructuring a store property and mutating it standalone breaks reactivity.,Mutate properties through the store reference.,Destructure a primitive out of the store and mutate the local copy.,"const store = useStore({ count: 0 });
+store.count++; // reactive","let { count } = useStore({ count: 0 });
+count++; // no update",High,https://qwik.dev/docs/components/state/
+11,State,Use regular functions for store methods needing this,"Arrow functions have no own this, so this.count resolves incorrectly in store methods.",Define store QRL methods with function(this){} so this binds to the store.,Use an arrow function for a store method that reads this.,"const state = useStore<CountStore>({
+  count: 0,
+  increment: $(function (this: CountStore) { this.count++; }),
+});","const state = useStore({
+  count: 0,
+  increment: $(() => { this.count++; }),
+});",Medium,https://qwik.dev/docs/components/state/
+12,State,Disable deep tracking for large stores,Deep reactivity allocates a Proxy per nested property; { deep: false } tracks only top level.,Pass { deep: false } when a store has many nested properties you don't need tracked.,Deep-track a huge nested store you never mutate deeply.,"const store = useStore(data, { deep: false });",const store = useStore(largeDeeplyNestedData); // many proxies,Medium,https://qwik.dev/docs/components/state/
+13,State,Use optional chaining for dynamically deleted properties,Deleting store properties during render can throw without optional access.,Access possibly-deleted store properties with optional chaining.,Access a property you may have deleted without a guard.,"delete store.propertyName;
+const v = store.propertyName?.value;","delete store.propertyName;
+const v = store.propertyName.value; // throws",Medium,https://qwik.dev/docs/components/state/
+14,Context,Use context to avoid prop drilling,Context lets descendants read and write shared state without threading props.,Provide state via useContextProvider and read it with useContext deep in the tree.,Drill the same store through many intermediate component props.,"export const CTX = createContextId('stuff');
+useContextProvider(CTX, useStore({ count: 0 }));
+// child:
+const data = useContext(CTX);",return <A data={data}><B data={data}><C data={data} /></B></A>;,Low,https://qwik.dev/docs/components/state/
+15,Serialization,Design app state to be serializable,Resumability serializes state into HTML; a heap-centric style breaks it.,"Adopt a DOM-centric, serializable state model.",Keep large non-serializable objects in module heap and expect resumption to work.,"const store = useStore({ count: 0, name: 'Qwik' });","let cache = new WeakMap(); // heap-centric, not serializable",High,https://qwik.dev/docs/concepts/resumable/
+16,Serialization,Wrap non-serializable values in noSerialize,Values like editor instances cannot be serialized and become undefined on resume.,Wrap non-serializable values with noSerialize and re-init them client-side.,Store a live third-party instance directly in a signal or store.,store.monacoInstance = noSerialize(editor);,store.monacoInstance = editor; // fails to serialize,High,https://qwik.dev/docs/components/state/
+17,Serialization,Wrap closures in QRL so they can be serialized,Function closures are only serializable when wrapped in a QRL via $.,Wrap event handlers and callbacks in $ to produce serializable QRLs.,Pass a raw closure where Qwik expects a serializable reference.,const handler = $(() => console.log('hi'));,const handler = () => console.log('hi'); // not serializable,High,https://qwik.dev/docs/concepts/resumable/
+18,Serialization,Run non-serializable work client-only,Class instances and Streams can't be serialized; run that code on the browser only.,Guard non-serializable initialization to the client.,Serialize class instances or Streams across the server/client boundary.,useVisibleTask$(() => { init(); }); // client only,const s = useStore({ stream: someReadableStream });,Medium,https://qwik.dev/docs/concepts/resumable/
+19,Reactivity,Inline expressions in the template,Computing derived values outside the template forces full re-renders on change.,Inline the derived expression directly in JSX.,Precompute a derived value in the component body then render it.,<div>{signal.value > 0 ? 'Bigger' : 'Smaller'}</div>,"const label = signal.value > 0 ? 'Bigger' : 'Smaller';
+return <div>{label}</div>;",Medium,https://qwik.dev/docs/guides/best-practices/
+20,Reactivity,Derive synchronous state with useComputed$,Reading a signal in the body re-runs the component; useComputed$ scopes recomputation.,Wrap synchronous derived values in useComputed$.,Compute derived values inline in the component body.,"const doubleCount = useComputed$(() => count.value * 2);
+return <div>{doubleCount.value}</div>;","const doubleCount = count.value * 2;
+return <div>{doubleCount}</div>;",Medium,https://qwik.dev/docs/guides/best-practices/
+21,Reactivity,Track each nested store value individually,"Deep store updates don't mutate the store itself, so store[i].count++ won't trigger track.",Track the specific nested value you depend on.,Rely on tracking the whole store for a nested mutation.,useTask$(({ track }) => { track(() => store.item.count); });,useTask$(({ track }) => { track(store); }); // misses store.item.count++,High,https://qwik.dev/docs/components/tasks/
+22,Reactivity,Pass a signal directly to track when possible,track(signal) is more efficient than wrapping the read in a function.,Call track(signal) directly for a single signal.,Wrap a single signal read in an arrow function inside track.,const newText = track(text);,const newText = track(() => text.value);,Low,https://qwik.dev/docs/components/tasks/
+23,Tasks,Default to useTask$ for init and state changes,useTask$ handles sync or async work before render on server or client.,Use useTask$ as the default for component init and reacting to state.,Reach for useVisibleTask$ as the default task API.,useTask$(async () => { await load(); });,"useVisibleTask$(async () => { await load(); }); // eager, client-only",Medium,https://qwik.dev/docs/components/tasks/
+24,Tasks,Use useVisibleTask$ only as a last resort,It eagerly runs client code and can block the main thread until finished.,"Prefer useTask$, useOn, useOnWindow, or useOnDocument before useVisibleTask$.",Use useVisibleTask$ for logic that could run on the server or via events.,useTask$(({ track }) => { track(() => text.value); if (isServer) return; run(); });,useVisibleTask$(() => { run(); });,High,https://qwik.dev/docs/components/tasks/
+25,Tasks,Do not manipulate the DOM in useTask$,"useTask$ runs before rendering, so the DOM isn't ready for manipulation.",Use useVisibleTask$ for DOM work that requires rendered elements.,Read or mutate DOM nodes inside useTask$.,useVisibleTask$(() => { el.value?.focus(); });,useTask$(() => { document.querySelector('#x').focus(); });,High,https://qwik.dev/docs/components/tasks/
+26,Tasks,Clean up timers and intervals with cleanup(),cleanup runs on re-trigger or teardown to release local resources.,Register a cleanup callback to clear intervals and timeouts.,Set an interval without clearing it on teardown.,"useVisibleTask$(({ cleanup }) => {
+  const id = setInterval(update, 1000);
+  cleanup(() => clearInterval(id));
+});","useVisibleTask$(() => {
+  setInterval(update, 1000); // never cleared
+});",Medium,https://qwik.dev/docs/components/tasks/
+27,Tasks,Do not block render with awaited delays in tasks,Awaiting a delay in useTask$ blocks rendering; resolve then defer work.,Run delayed side effects on a separate unawaited promise.,Await an artificial delay inside useTask$.,"useTask$(({ track }) => {
+  const v = track(text);
+  isServer ? update() : delay(500).then(update);
+});","useTask$(async ({ track }) => {
+  const v = track(text);
+  await delay(500); update(); // blocks render
+});",Medium,https://qwik.dev/docs/components/tasks/
+28,Tasks,Call hooks only at the root of component$ or a use* function,"Hooks cannot run conditionally, inside tasks, QRLs, or event handlers.",Call use* hooks unconditionally at the top level.,"Call a hook inside a condition, task, QRL, or event handler.","export default component$(() => {
+  const nav = useNavigate();
+  return <button onClick$={() => nav('/x')} />;
+});","export default component$(() => {
+  return <button onClick$={() => useNavigate()} />;
+});",High,https://qwik.dev/docs/components/tasks/
+29,Data Fetching,Use useResource$ for async data without blocking render,"useResource$ streams during SSR and fetches in parallel, unlike fetch in useTask$.",Fetch external async data with useResource$ and track inputs.,Call fetch inside useTask$ for render data.,"const r = useResource$(async ({ track }) => {
+  track(() => id.value);
+  return (await fetch(url)).json();
+});",useTask$(async () => { data.value = await (await fetch(url)).json(); });,Medium,https://qwik.dev/docs/components/tasks/
+30,Data Fetching,Abort stale requests with cleanup and AbortController,Re-running a resource should cancel the previous in-flight request.,Wire an AbortController signal and abort it in cleanup.,Leave prior fetches running when the resource re-runs.,"useResource$(async ({ track, cleanup }) => {
+  track(() => query.value);
+  const c = new AbortController();
+  cleanup(() => c.abort());
+  return fetch(url, { signal: c.signal });
+});","useResource$(async ({ track }) => {
+  track(() => query.value);
+  return fetch(url); // stale requests pile up
+});",Medium,https://qwik.dev/docs/components/state/
+31,Data Fetching,Render resource states with <Resource>,"<Resource> shows pending, rejected, and resolved UI and pauses SSR until resolved.",Use <Resource> with onPending/onRejected/onResolved handlers.,Read resource.value without handling loading or error states.,<Resource value={r} onPending={() => <p>Loading</p>} onResolved={(d) => <p>{d}</p>} />,<div>{r.value}</div>,Medium,https://qwik.dev/docs/components/state/
+32,Performance,Delay JavaScript execution as much as possible,Qwik boots interactive with ~1KB JS and loads more only on interaction.,Let Qwik lazy-load code on demand instead of eager upfront execution.,Eagerly download and run JS that blocks interactivity.,// component$ + $ boundaries let Qwik defer chunks automatically,// import everything eagerly at module top for immediate execution,High,https://qwik.dev/docs/concepts/think-qwik/
+33,Performance,Rely on resumability instead of hydration,Qwik resumes server execution on the client rather than rebuilding state.,Serialize state into HTML and resume where the server stopped.,Rebuild component trees and state on the client like hydration frameworks.,"// state serialized into HTML, resumed on client with no replay",// re-run app logic on the client to attach listeners,High,https://qwik.dev/docs/concepts/resumable/
+34,Events,Register DOM listeners with useOn/useOnDocument,Registering listeners in useVisibleTask$ downloads and runs JS eagerly even if unused.,Use useOnDocument with a $ handler for document events; no manual cleanup.,Add document listeners inside useVisibleTask$.,"useOnDocument('mousemove', $((e) => console.log(e)));","useVisibleTask$(({ cleanup }) => {
+  document.addEventListener('mousemove', fn);
+  cleanup(() => document.removeEventListener('mousemove', fn));
+});",High,https://qwik.dev/docs/guides/best-practices/
+35,Routing,Use useLocation instead of window.location,Reading window.location forces eager client JS; useLocation works during SSR.,Read URL data via useLocation so logic can run on the server.,Branch on window.location inside useVisibleTask$.,"const loc = useLocation();
+if (loc.url.href.includes('foo')) { /* ... */ }",useVisibleTask$(() => { if (window.location.href.includes('foo')) {} });,High,https://qwik.dev/docs/guides/best-practices/
+36,Data Fetching,Prefer routeLoader$ for early SSR data,routeLoader$ fetches data as part of the initial HTTP request; useResource$ is lower-level browser fetching.,Use routeLoader$ to load data eagerly during SSR.,Use useResource$ for data that should be part of the initial server response.,export const useData = routeLoader$(async () => fetchData());,const r = useResource$(async () => fetchData()); // for early SSR data,Medium,https://qwik.dev/docs/components/state/
+37,Components,Access DOM elements via a ref signal,Passing a signal to ref exposes the rendered element for measurement or library init.,"Create a signal, pass it to ref, and read it in useVisibleTask$.",Query the DOM by selector to reach a component's element.,"const ref = useSignal<Element>();
+useVisibleTask$(() => ref.value?.getBoundingClientRect());
+return <article ref={ref} />;",useVisibleTask$(() => document.querySelector('article').getBoundingClientRect());,Medium,https://qwik.dev/docs/components/overview/
+38,Accessibility,Use useId for stable SSR/client IDs,useId keeps IDs consistent across server and client for a11y and libraries.,Generate element IDs with useId for label/aria associations.,Hardcode or randomly generate IDs that differ between SSR and client.,"const id = useId();
+return <><label for={id}>Name</label><input id={id} /></>;","const id = 'field-' + Math.random();
+return <input id={id} />;",Medium,https://qwik.dev/docs/components/overview/

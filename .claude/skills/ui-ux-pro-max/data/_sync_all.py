@@ -295,7 +295,7 @@ def derive_ui_reasoning(prod):
         "Flat Design": "Color shift hover + Fast 150ms transitions + No shadows",
         "Minimalism": "Subtle hover 200ms + Smooth transitions + Clean",
         "Motion-Driven": "Scroll animations + Parallax + Page transitions",
-        "Micro-interactions": "Haptic feedback + Small 50-100ms animations",
+        "Micro-interactions": "Press feedback + Small 50-100ms animations",
         "Vibrant": "Large section gaps 48px+ + Color shift hover + Scroll-snap",
         "Aurora": "Flowing gradients 8-12s + Color morphing",
         "AI-Native": "Typing indicator + Streaming text + Context reveal",
@@ -325,7 +325,7 @@ def derive_ui_reasoning(prod):
         rules["if_data_heavy"] = "prioritize-data-density"
     if not rules:
         rules["if_ux_focused"] = "prioritize-clarity"
-        rules["if_mobile"] = "optimize-touch-targets"
+        rules["if_small_viewport"] = "optimize-touch-targets"
 
     # Anti-patterns
     anti_patterns = []

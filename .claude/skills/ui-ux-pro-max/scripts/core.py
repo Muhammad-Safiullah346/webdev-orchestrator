@@ -73,28 +73,25 @@ CSV_CONFIG = {
 }
 
 STACK_CONFIG = {
+    # Web stacks only — this harness is web-development focused. Non-web
+    # (native mobile and desktop) stacks are intentionally excluded so the
+    # agent only ever selects a web target.
     "react":            {"file": "stacks/react.csv"},
     "nextjs":           {"file": "stacks/nextjs.csv"},
     "vue":              {"file": "stacks/vue.csv"},
     "svelte":           {"file": "stacks/svelte.csv"},
     "astro":            {"file": "stacks/astro.csv"},
-    "swiftui":          {"file": "stacks/swiftui.csv"},
-    "react-native":     {"file": "stacks/react-native.csv"},
-    "flutter":          {"file": "stacks/flutter.csv"},
     "nuxtjs":           {"file": "stacks/nuxtjs.csv"},
     "nuxt-ui":          {"file": "stacks/nuxt-ui.csv"},
     "html-tailwind":    {"file": "stacks/html-tailwind.csv"},
     "shadcn":           {"file": "stacks/shadcn.csv"},
-    "jetpack-compose":  {"file": "stacks/jetpack-compose.csv"},
     "threejs":          {"file": "stacks/threejs.csv"},
     "angular":          {"file": "stacks/angular.csv"},
     "laravel":          {"file": "stacks/laravel.csv"},
-    "javafx":           {"file": "stacks/javafx.csv"},
-    "wpf":              {"file": "stacks/wpf.csv"},
-    "winui":            {"file": "stacks/winui.csv"},
-    "avalonia":         {"file": "stacks/avalonia.csv"},
-    "uno":              {"file": "stacks/uno.csv"},
-    "uwp":              {"file": "stacks/uwp.csv"},
+    "solidjs":          {"file": "stacks/solidjs.csv"},
+    "htmx":             {"file": "stacks/htmx.csv"},
+    "qwik":             {"file": "stacks/qwik.csv"},
+    "alpinejs":         {"file": "stacks/alpinejs.csv"},
 }
 
 # Common columns for all stacks
