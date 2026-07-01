@@ -1,6 +1,11 @@
 # Python bytecode from design-suite scripts (regenerated at runtime)
 __pycache__/
 *.pyc
+# Machine-specific / local config — never distribute
+.claude/settings.local.json
+**/settings.local.json
+.env
+.env.*
 # workflow/run artifacts
 .workflow/
 *.log
