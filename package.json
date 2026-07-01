@@ -24,7 +24,6 @@
     "release:minor": "node scripts/release.mjs minor",
     "release:major": "node scripts/release.mjs major",
     "preversion": "npm run typecheck",
-    "postversion": "git push --follow-tags",
     "prepublishOnly": "npm run typecheck"
   },
   "keywords": [
