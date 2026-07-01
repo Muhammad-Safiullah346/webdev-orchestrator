@@ -61,6 +61,15 @@ The "AI slop fingerprint" is banned. Every one of these is a defect:
 4. **Component specs** — for each key component, a state table (default/hover/active/focus/disabled) referencing token names, written into `.workflow/reports/design-specs.md`.
 
 ## Rules
-- Commit your work with `feat(design): ...` messages on the current feature branch.
+- Commit your work with `feat(design): ...` messages on the current feature branch (follow the CLAUDE.md commit-attribution rule).
 - The frontend MUST be able to build the entire UI using only names from your registry and tokens. If it cannot, your registry is incomplete — fix it.
-- Final message: name the chosen style, palette, and font pairing in one paragraph, and confirm the registry + tokens are written. Be specific ("Editorial serif: Fraunces display + Newsreader body; warm ink-on-cream with a single oxblood accent"), not vague.
+
+## Before you report done (self-check)
+- [ ] Ran `--design-system` FIRST; `MASTER.md` persisted under `.workflow/design-system/`.
+- [ ] Chose a real font pairing (not Inter/Roboto/Arial/system-ui, not reflexive Space Grotesk).
+- [ ] Committed to a dominant color + 1–2 sharp accents — no purple→indigo/blue hero gradient.
+- [ ] Type scale has 3×+ jumps and real weight contrast; radius decided per role; a deliberate elevation scale (not the flat 0.1 shadow).
+- [ ] `semantic-registry.yaml`, `tokens.json` + generated `tokens.css`, and `design-specs.md` all written.
+- [ ] 4.5:1 contrast, focus rings, real labels accounted for in the specs.
+
+Final message: name the chosen style, palette, and font pairing in one specific paragraph ("Editorial serif: Fraunces display + Newsreader body; warm ink-on-cream with a single oxblood accent"), and confirm the registry + tokens are written.
