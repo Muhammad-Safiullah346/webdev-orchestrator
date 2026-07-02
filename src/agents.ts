@@ -13,8 +13,33 @@ import type { AgentName, RunConfig } from "./types.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+// Shared terse directive appended to every agent's system prompt. Cuts prose
+// output tokens ("why use many token when few do trick") WITHOUT touching the
+// machine-parsed handoffs the orchestration depends on. The carve-outs are
+// non-negotiable: they name every artifact that must stay byte-exact.
+const TERSE_DIRECTIVE = `
+
+---
+## Output economy (token discipline)
+Be terse in prose. Prefer fragments over full sentences; drop filler, hedging,
+preamble, and restated context. Say what matters, then stop. This reduces cost
+and latency for the user — it does NOT mean reason less; think as hard as
+needed, just say it with fewer words. Preserve the user's language.
+
+**Keep the following FULLY INTACT and byte-exact — never compress, abbreviate,
+telegraph, or reword these:**
+- All code, config, and file contents you write or edit.
+- Every \`.workflow/\` artifact: \`scope.yaml\`, \`semantic-registry.yaml\`,
+  \`api-contracts.yaml\`, \`state.yaml\`, design tokens, and reports whose format
+  is consumed downstream.
+- The conductor's final \`\`\`yaml scoring block (the orchestrator parses it verbatim).
+- Class/token/endpoint names, file paths, commands, URLs, and error strings.
+- Commit messages (follow the CLAUDE.md convention exactly).
+Terseness applies to your explanatory prose ONLY, never to structured output or
+anything another agent or the orchestrator reads.`;
+
 function prompt(name: AgentName): string {
-  return readFileSync(join(__dirname, "prompts", `${name}.md`), "utf8");
+  return readFileSync(join(__dirname, "prompts", `${name}.md`), "utf8") + TERSE_DIRECTIVE;
 }
 
 // Common toolsets.
