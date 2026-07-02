@@ -70,6 +70,10 @@ export class Orchestrator {
       this.log("🌱 git ready (main + develop)\n");
     }
 
+    // Explain mode is read-only and needs no scope/git/pipeline — short-circuit
+    // before discovery so a plain question never triggers a build.
+    if (this.cfg.mode === "explain") return this.runExplainMode();
+
     // 1. Scope
     let scope = this.mem.readScope();
     if (this.plan.scope || !scope) {
@@ -458,6 +462,23 @@ export class Orchestrator {
     if (this.plan.visualQa) await this.phaseVisualQa();
     const score = await this.runConductor(scope);
     return { ok: true, summary: `Audit complete. Overall ${score.score}/100. Reports in .workflow/reports/.` };
+  }
+
+  private async runExplainMode(): Promise<{ ok: boolean; summary: string }> {
+    this.mem.setPhase("explain");
+    this.log("📖 Explain mode (read-only — understanding the code, changing nothing)…");
+    const answer = await this.runAgent("explain", [
+      `Question: ${this.cfg.request}`,
+      ``,
+      `Answer it by reading the actual code in ${this.cfg.target}. Ground every claim in file:line.`,
+      `Change nothing. Write your explanation to .workflow/reports/explain.md and give the answer in your final message.`,
+    ].join("\n"));
+    return {
+      ok: true,
+      summary: answer?.trim()
+        ? "Explanation ready (see above; also written to .workflow/reports/explain.md)."
+        : "Explain agent produced no answer — see .workflow/reports/explain.md.",
+    };
   }
 
   // ── agent runner — each agent is its own isolated query() ──────────────

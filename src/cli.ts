@@ -28,7 +28,7 @@ import type { Mode, RunConfig } from "./types.ts";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const HARNESS_ROOT = resolve(__dirname, "..");
 
-const MODES: Mode[] = ["greenfield", "iteration", "bugfix", "refactor", "ui-polish", "migration", "audit"];
+const MODES: Mode[] = ["greenfield", "iteration", "bugfix", "refactor", "ui-polish", "migration", "audit", "explain"];
 const PRESET_NAMES: PresetName[] = ["balanced", "diverse", "solo"];
 
 interface Flags {
@@ -294,7 +294,7 @@ MODEL LANES (independent models → independent blind spots)
     { "build": "claude-opus-4-8", "review": "glm-5", "verify": "claude-haiku-4-5" }
 
 MODES
-  greenfield · iteration · bugfix · refactor · ui-polish · migration · audit
+  greenfield · iteration · bugfix · refactor · ui-polish · migration · audit · explain
 
 EXAMPLES
   webdev "build a markdown note app with tags and search"

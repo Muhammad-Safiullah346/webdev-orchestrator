@@ -7,7 +7,8 @@ export type Mode =
   | "refactor"
   | "ui-polish"
   | "migration"
-  | "audit";
+  | "audit"
+  | "explain";
 
 export type AgentName =
   | "discovery"
@@ -23,7 +24,8 @@ export type AgentName =
   | "e2e"
   | "visual-qa"
   | "bugfix"
-  | "conductor";
+  | "conductor"
+  | "explain";
 
 export interface Feature {
   name: string;

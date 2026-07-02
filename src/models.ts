@@ -33,6 +33,7 @@ export const AGENT_LANE: Record<AgentName, Lane> = {
   e2e: "verify",
   "visual-qa": "visual",
   conductor: "gate",
+  explain: "review",
 };
 
 // Anthropic-dialect IDs (most likely what a proxy fronting the Anthropic API

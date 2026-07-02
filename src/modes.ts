@@ -104,12 +104,29 @@ export function planFor(mode: Mode, fast: boolean): PhasePlan {
         analysisOnly: true,
         summary: "Analysis only — run reviewers, produce a report, change nothing.",
       });
+
+    case "explain":
+      return base({
+        scope: false,
+        featureBuild: false,
+        reviewWave: [],
+        runtime: false,
+        e2e: false,
+        visualQa: false,
+        conductor: false,
+        analysisOnly: true,
+        summary: "Read-only: explain how the code/feature/file works. One agent, no changes, no pipeline.",
+      });
   }
 }
 
 /** Heuristic mode detection from the request when --mode is not given. */
 export function detectMode(request: string, hasExistingCode: boolean): Mode {
   const r = request.toLowerCase();
+  // Pure understanding questions first — must beat bugfix/audit, which also
+  // match words like "error" or "review". Only when NOT asking to change code.
+  if (/\b(explain|understand|how does|how do|what does|walk me through|where is|describe how|why does)\b/.test(r)
+      && !/\b(fix|change|add|build|refactor|implement|make it)\b/.test(r)) return "explain";
   if (/\b(audit|review|analy[sz]e|assess|inspect)\b/.test(r) && !/\bfix\b/.test(r)) return "audit";
   if (/\b(bug|broken|not working|doesn't work|crash|error|fails?|regression)\b/.test(r)) return "bugfix";
   if (/\b(refactor|clean up|restructure|split|extract|tidy)\b/.test(r)) return "refactor";

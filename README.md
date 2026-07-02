@@ -115,6 +115,7 @@ If the build can't reach the quality bar, it stops and tells you to check `.work
 | `ui-polish` | Improving how it looks | `webdev "make the landing page premium" -m ui-polish` |
 | `migration` | Upgrading a dependency or framework | `webdev "upgrade to React 19" -m migration` |
 | `audit` | Analysis only — reports, changes nothing | `webdev "review for security + perf" -m audit` |
+| `explain` | Understanding existing code — how a feature/file/flow works (read-only, one agent, no build) | `webdev "how does the auth refresh work in auth.ts"` |
 
 ---
 
@@ -229,7 +230,7 @@ src/
   cli.ts           # command parsing, mode detection, env wiring
   orchestrator.ts  # the controller — phase machine, retries, quality gate
   agents.ts        # the 14 agent definitions (tools, models, skills)
-  modes.ts         # the 7 modes → phase plans
+  modes.ts         # the 8 modes → phase plans
   models.ts        # model lanes (build ≠ review ≠ verify)
   memory.ts        # file-based memory (project + global)
   env.ts           # environment provisioning

@@ -176,6 +176,14 @@ export function buildAgents(config: RunConfig): Record<AgentName, AgentDefinitio
       model: gate,
       effort: "high",
     },
+
+    explain: {
+      description:
+        "Read-only code explainer. Answers how a feature/file/flow works, grounded in the real code. Changes nothing.",
+      prompt: prompt("explain"),
+      tools: READ_ONLY,
+      model: review,
+    },
   };
 }
 
@@ -183,5 +191,5 @@ export function buildAgents(config: RunConfig): Record<AgentName, AgentDefinitio
 export const ALL_AGENT_NAMES: AgentName[] = [
   "discovery", "designer", "frontend", "backend", "docs", "devops",
   "qa", "security", "code-review", "performance", "e2e", "visual-qa",
-  "bugfix", "conductor",
+  "bugfix", "conductor", "explain",
 ];
