@@ -1,122 +1,174 @@
-# webdev — multi-agent web-development orchestrator
+# webdev — a multi-agent app builder you run from the terminal
 
-A Claude Agent SDK harness that builds web apps with a **team of real, isolated subagents** driven by a **deterministic PM** — not one model role-playing a whole team. It replaces the [turkey-build](https://github.com/rangerchaz/turkey-build) / `auto-app-builder` skill, swaps `aimem` for a **file-based memory** system, and wires an **anti-slop design layer** through the claudekit design suite so the output looks like a $10,000 site, not generic AI slop.
+`webdev` is a command-line tool that **builds and modifies web apps for you** using a team of specialized AI agents. You describe what you want in plain English — `webdev "build a markdown notes app with tags"` — and it plans the work, designs the UI, writes the frontend and backend, tests it, reviews it for quality and security, and hands you a working app on a clean git history.
 
-## Why this exists
+It runs on the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk). Under the hood, 14 real AI subagents (a designer, a frontend engineer, a backend engineer, testers, reviewers, a quality gate) each work in their own isolated context, coordinated by a deterministic controller. You don't need to know any of that to use it — but if you're curious, the [How it works](#how-it-works) section explains everything.
 
-[`turkey-build`](https://github.com/rangerchaz/turkey-build)'s "agents" are markdown files the single main model reads and *role-plays* sequentially — no context isolation, no real parallelism, quality degrades, slop ships. This harness uses the SDK's `agents` (real `AgentDefinition`s): each agent runs as its **own `query()`** with a fresh context, scoped tools, and the right model, while the orchestrator — **plain TypeScript** — owns the control flow (phase order, parallel waves, retries, quality gate). The model never decides the workflow.
+> **New here? Jump to [Getting started](#getting-started)** — it's a 4-step path from install to your first build.
 
-```
-discovery → [feature waves: designer→backend→frontend→docs/devops] (parallel, dependency-ordered)
-          → provision (.env + db + migrations + seed) → regression check → review wave (parallel)
-          → runtime verify → e2e + screenshots → visual-QA (anti-slop gate)
-          → conductor quality gate (loops targeted bugfixes until ≥ threshold)
-          → merge develop → main, tag release
-```
+---
 
-## Install
+## Getting started
 
-`webdev` is a global CLI — **install it once, run it in any project. No cloning required.**
+Four steps. Do them in order — step 2 (auth) is required before anything will run.
+
+### 1. Install
+
+`webdev` is a global command. Install it once; then use it in any project folder.
 
 ```bash
-# Option A — from npm (once published):
+# From npm (recommended):
 npm install -g webdev-orchestrator
 
-# Option B — straight from GitHub (works the moment the repo is pushed):
+# …or straight from GitHub (no npm account needed):
 npm install -g github:Muhammad-Safiullah346/webdev-orchestrator
 ```
 
-Either way you then run, from inside *any* project directory:
+Requires **Node.js 18+**. Everything else the tool needs (the AI agents, the design suite, safety hooks) ships inside the package — nothing else to download.
+
+> If your `npm` is locked down and blocks install scripts, run `npm rebuild esbuild` once after installing (the TypeScript runtime needs it). Most setups don't need this.
+
+### 2. Connect a model provider (required)
+
+`webdev` doesn't include an AI model — you point it at one you have access to, using environment variables. Pick the **one** line that matches your setup and run it in your terminal:
 
 ```bash
-webdev setup    # copies the bundled design suite into ~/.claude/skills, runs a preflight
-webdev doctor   # verifies Node, auth, git, Python, design suite
-webdev "build a markdown note app with tags and search"
+# A) Direct Anthropic API (you have an Anthropic API key):
+export ANTHROPIC_API_KEY=sk-ant-...
+
+# B) A proxy or gateway (Kiro, LiteLLM, Envoy, a company gateway, …):
+export ANTHROPIC_API_KEY=<your-key>   ANTHROPIC_BASE_URL=<the-proxy-url>
+
+# C) Amazon Bedrock (uses your AWS credentials):
+export CLAUDE_CODE_USE_BEDROCK=1
+
+# D) Google Vertex (uses your GCP credentials):
+export CLAUDE_CODE_USE_VERTEX=1
 ```
 
-The install ships everything it needs (the 14 agents, the design suite, the hooks) inside the package — there is no build step and nothing else to fetch.
+To make it permanent, add the line to your shell profile (`~/.bashrc`, `~/.zshrc`). To confirm it worked, `webdev doctor` (next step) tells you which provider it detected.
 
-> If your `npm` is locked down and blocks dependency install scripts, run `npm rebuild esbuild` once after install (the `tsx` runtime depends on it). Standard npm setups handle this automatically.
-
-### Auth — bring your own model provider
-
-The harness bundles **no** provider. It sends model requests to whatever the Agent SDK env vars point at, so it works the same against the Anthropic API, a proxy/gateway (Kiro, LiteLLM, Envoy…), or Bedrock/Vertex. Set **one** of:
+### 3. Run setup
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...                            # direct Anthropic API
-export ANTHROPIC_API_KEY=<key>  ANTHROPIC_BASE_URL=<proxy-url> # proxy / gateway
-export CLAUDE_CODE_USE_BEDROCK=1                               # Amazon Bedrock (AWS creds)
-export CLAUDE_CODE_USE_VERTEX=1                                # Google Vertex (GCP creds)
+webdev setup
 ```
 
-`webdev doctor` reports which path it detected. Nothing in the harness is hardwired to any provider — the only coupling is these env vars.
+This does two things once: installs the bundled **design suite** — 4 skills (`ui-ux-pro-max`, `design-system`, `brand`, `ui-styling`) that give the agents design taste — into `~/.claude/skills`, and runs a **health check** of your environment. It finishes by reminding you how to set auth if you haven't.
 
-### Developing on the harness itself
+In that health-check output, you want ✓ for **Node, Auth, git, and the design suite**. **Python is recommended, not required:** two design-suite scripts need it — `ui-ux-pro-max`'s `search.py` (the design-intelligence engine that produces curated style/palette/font recommendations) and `ui-styling`'s `shadcn_add.py` (installs shadcn/ui components). Without Python the build still runs and the anti-slop guardrails still apply, but agents fall back to their own design judgment instead of the suite's curated recommendations, and install shadcn components another way (`npx shadcn`) — you lose the "$10,000-site" curation, not the safety floor. git can be skipped later with `--no-git`. If anything isn't green, fix it and re-run `webdev doctor` to re-check — you don't need to run full `setup` again.
+
+### 4. Build something
+
+From inside the folder where you want the app (empty folder for a new app, or an existing project to extend):
 
 ```bash
-git clone https://github.com/Muhammad-Safiullah346/webdev-orchestrator.git
-cd webdev-orchestrator && npm install
-npm run webdev -- "build a notes app"   # run without a global install
-npm link                                # or expose `webdev` globally from the clone
+webdev "build a markdown notes app with tags and full-text search"
 ```
 
+That's it. See [What happens when you run it](#what-happens-when-you-run-it) so nothing surprises you.
 
-## Usage
+---
 
-The core command is `webdev "<what to build>"`. Run it from inside any project directory:
+## What happens when you run it
 
-```bash
-webdev "build a markdown note app with tags and search"        # greenfield (auto-detected)
-webdev "add dark mode and CSV export" -m iteration -t ./notes  # iteration
-webdev "login returns 500 after the migration" -m bugfix       # bugfix
-webdev "make the landing page premium, not generic" -m ui-polish
-webdev "review this codebase for security + perf" -m audit
-```
+A build is **interactive and visible** — it's not a black box, and it may pause to ask you things:
 
-### Commands
+1. **It may ask a couple of questions first.** If your request is ambiguous about something important (should it have user accounts? a database?), it asks up to a few quick questions. If your request is clear, it just proceeds.
+2. **It may ask for secret keys once.** If the app needs a third-party service (Stripe, OpenAI, email…), it prompts you **once**, with hidden input, for those keys — or you can skip and it will mock that service in tests. (Your own model key from step 2 is separate and never re-asked.)
+3. **It works through phases, printing progress** — scoping, designing, building each feature, testing, reviewing, and a final quality score. This can take a while for a full app.
+4. **You get a working app on clean git branches.** Features are built on `feature/*` branches and merged to `develop`; when the quality gate passes, `develop` merges to `main` with a version tag. Use `--no-git` to skip all git handling.
+
+**Where things end up:**
+- Your **app code** — written directly into the project folder.
+- **`.workflow/`** — the build's working memory: the plan (`scope.yaml`), the design system, the API contract, and every agent's report under `.workflow/reports/`. If a build stops early, this is where to look.
+- **`.env`** — created with working local values so the app actually runs; always git-ignored, never committed.
+
+If the build can't reach the quality bar, it stops and tells you to check `.workflow/reports/` rather than shipping something broken.
+
+---
+
+## Commands
 
 | Command | What it does |
 |---------|--------------|
-| `webdev "<request>"` | Build/modify a project (the main command; mode auto-detected) |
-| `webdev setup` | One-time onboarding: install the design suite into `~/.claude/skills`, then run the preflight |
-| `webdev doctor` | Check the environment is ready (Node, auth, git, Python, design suite) |
-| `webdev install-skills` | (Re)install just the bundled design suite into `~/.claude/skills` |
-| `webdev models` | Print the resolved lane→model map |
-| `webdev models --probe` | Test which model IDs your provider actually accepts |
-| `webdev --help` | Full usage and flag reference |
+| `webdev "<request>"` | **The main command.** Build or modify a project from a plain-English request. |
+| `webdev setup` | One-time onboarding: install the design suite + run the health check. |
+| `webdev doctor` | Check your environment is ready (Node, auth, git, Python, design suite). |
+| `webdev install-skills` | Re-install just the design suite into `~/.claude/skills`. |
+| `webdev models` | Show which AI model each role will use. |
+| `webdev models --probe` | Test which model names your provider actually accepts. |
+| `webdev --help` | Full flag reference. |
 
-### Modes (same engine, different phase plan)
+---
 
-| Mode | What it does |
-|------|--------------|
-| `greenfield` | New build from scratch → full pipeline → tagged release |
-| `iteration` | Add features to an existing app, guarding regressions → point release |
-| `bugfix` | Reproduce → trace → isolate root cause → minimal fix → verify |
-| `refactor` | Restructure code, prove behavior unchanged |
-| `ui-polish` | Re-run the design suite, fix CSS/layout, pass visual-QA |
-| `migration` | Upgrade deps/framework incrementally with tests at each step |
-| `audit` | Analysis only — reports, no code changes |
+## Modes — what kind of work to do
 
-Mode is auto-detected from your request and whether the target already has code; override with `-m`.
+`webdev` guesses the right mode from your request and whether the folder already has code. Override it with `-m` when you want to be explicit.
 
-### Options
+| Mode | Use it for | Example |
+|------|-----------|---------|
+| `greenfield` | Building a brand-new app from scratch | `webdev "build a recipe sharing site"` |
+| `iteration` | Adding features to an existing app | `webdev "add CSV export" -m iteration` |
+| `bugfix` | Diagnosing and fixing a specific defect | `webdev "login returns 500 after signup" -m bugfix` |
+| `refactor` | Restructuring code without changing behavior | `webdev "split the giant server.js" -m refactor` |
+| `ui-polish` | Improving how it looks | `webdev "make the landing page premium" -m ui-polish` |
+| `migration` | Upgrading a dependency or framework | `webdev "upgrade to React 19" -m migration` |
+| `audit` | Analysis only — reports, changes nothing | `webdev "review for security + perf" -m audit` |
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `-m, --mode <mode>` | auto-detected | Force a mode (see table above) |
-| `-t, --target <dir>` | current dir | Project directory to build in (created if missing) |
-| `-p, --preset <name>` | `balanced` | Model preset: `balanced`, `diverse`, or `solo` |
-| `--model-<lane> <id>` | — | Override one lane's model (e.g. `--model-build`, `--model-review`) |
-| `--model <id>` | — | Single model for all lanes (only valid with `--preset solo`) |
-| `--threshold <1-100>` | `98` | Quality-gate score the conductor must reach to ship |
-| `-c, --concurrency <n>` | `3` | Max agents running in parallel per wave |
-| `--fast` | off | Skip the E2E + visual-QA phases for a quicker pass |
-| `--no-git` | off | Single-branch mode; skip git branch/merge orchestration |
-| `-y, --yes` | off | Non-interactive: auto-approve tool use, mock external secrets |
+---
 
-## Model lanes — independent models, independent blind spots
+## Options
 
-The model that **builds** code is never the one that **reviews, tests, or judges** it. A reviewer running the same model as the author shares its blind spots and rationalizes the same mistakes; an independent model catches them. Agents are grouped into lanes, each with its own model:
+All optional — the defaults are sensible. Add them after your request:
+
+```bash
+webdev "build a blog" -m greenfield -t ./my-blog --fast
+```
+
+| Flag | Default | What it does |
+|------|---------|--------------|
+| `-m, --mode <mode>` | auto-detected | Force a mode (see the table above). |
+| `-t, --target <dir>` | current folder | Which folder to build in (created if it doesn't exist). |
+| `-p, --preset <name>` | `balanced` | Which model lineup to use: `balanced`, `diverse`, or `solo` (see [Model lanes](#model-lanes)). |
+| `--threshold <1-100>` | `98` | The quality score the build must reach before it ships. |
+| `-c, --concurrency <n>` | `3` | How many agents run at once. |
+| `--fast` | off | Skip the browser-test + visual-review phases for a quicker (less thorough) pass. |
+| `--no-git` | off | Don't create branches or commits — build everything in place. |
+| `-y, --yes` | off | Non-interactive: don't prompt for anything (secrets get mocked). Good for scripts/CI. |
+| `--model-<lane> <id>` | — | Advanced: set one role's model, e.g. `--model-build claude-opus-4-8`. |
+| `--model <id>` | — | Advanced: one model for everything (only with `--preset solo`). |
+
+---
+
+## How it works
+
+*(Everything below is background — you don't need it to use the tool.)*
+
+### The pipeline
+
+The tool doesn't let one AI improvise a whole app. A deterministic controller (plain code, not an AI) drives fixed phases and hands work to specialized agents:
+
+```
+discovery → [feature waves: designer → backend → frontend → docs/devops]  (parallel where possible)
+          → provision (.env + database + seed data)
+          → review wave (QA · security · code-review · performance)
+          → runtime + browser tests → visual review (anti-slop gate)
+          → quality gate (loops targeted fixes until score ≥ threshold)
+          → merge to main, tag a release
+```
+
+Each agent runs as its **own** AI session with a fresh context and only the tools it needs — so the reviewer isn't the same context that wrote the code, and quality doesn't degrade from one overloaded session juggling everything.
+
+### The 14 agents
+
+`discovery` `designer` `frontend` `backend` `docs` `devops` `qa` `security` `code-review` `performance` `e2e` `visual-qa` `bugfix` `conductor`.
+
+Each has a scoped toolset (reviewers can't edit; the visual reviewer can only look) and a detailed system prompt in `src/prompts/`.
+
+### Model lanes
+
+Independent models catch each other's mistakes. The model that **writes** code is never the one that **reviews or tests** it — a reviewer running the same model as the author shares its blind spots; a different model catches them. Agents are grouped into lanes, each with its own model:
 
 | Lane | Agents |
 |------|--------|
@@ -128,72 +180,69 @@ The model that **builds** code is never the one that **reviews, tests, or judges
 | `visual` | visual-qa |
 | `gate` | conductor |
 
-**Presets** (`-p`):
-- **balanced** (default) — `build`=Opus 4.8, everything that judges/designs/verifies=Sonnet 4.6. Author (Opus) ≠ reviewer/tester (Sonnet) everywhere, using only the two IDs most likely on your proxy.
-- **diverse** — cross-family spread (design=Opus, build=Sonnet, review=GLM-5, verify=Haiku, visual=Opus) for maximum blind-spot coverage. Run `webdev models --probe` first to confirm the IDs.
-- **solo** — all lanes inherit one model (for a single-model proxy).
+**Presets** (choose with `-p`):
+- **`balanced`** (default) — builders use Opus 4.8; everything that designs/reviews/tests uses Sonnet 4.6. Guarantees author ≠ reviewer, using just two widely-available models.
+- **`diverse`** — spreads across model families (build=Sonnet, review=GLM-5, verify=Haiku, …) for maximum blind-spot coverage. Run `webdev models --probe` first to confirm your provider serves those.
+- **`solo`** — every lane uses one model (for a provider that only offers one).
 
-`webdev models` prints the resolved map; `webdev models --probe` tests which model IDs your proxy actually accepts. Persist a custom map in `~/.claude/webdev-models.json`, e.g. `{ "build": "claude-opus-4-8", "review": "glm-5", "verify": "claude-haiku-4-5" }`. The resolver **warns** if any judging lane collapses onto the build model.
+`webdev models` shows the resolved lineup. To customize permanently, create `~/.claude/webdev-models.json`, e.g. `{ "build": "claude-opus-4-8", "review": "glm-5", "verify": "claude-haiku-4-5" }`. The tool warns you if a reviewing lane accidentally ends up on the same model as the builder.
 
-> Model IDs depend on what your proxy serves. Defaults use Anthropic-dialect IDs (`claude-opus-4-8`, `claude-sonnet-4-6`, `claude-haiku-4-5`); Kiro Enterprise also exposes cross-family models (GLM-5, DeepSeek, Qwen). Probe before relying on `diverse`.
+> Model names depend on your provider. Defaults are Anthropic names (`claude-opus-4-8`, `claude-sonnet-4-6`, `claude-haiku-4-5`). Probe before relying on `diverse`.
 
-## The 14 agents
+### The anti-slop design layer
 
-`discovery` `designer` `frontend` `backend` `docs` `devops` `qa` `security` `code-review` `performance` `e2e` `visual-qa` `bugfix` `conductor`. Each has a scoped toolset (read-only reviewers can't edit; visual-QA only reads) and a system prompt in `src/prompts/`. Design-facing agents preload the design suite skills.
+Generic AI output has a "fingerprint" — Inter font, a purple-to-blue gradient, three equal cards in a row, the same shadow on everything. `webdev` fights this deliberately: the designer runs a real design suite **first** (picking a distinctive style, palette, and font pairing), publishes design tokens + a component registry, and the frontend may only use those. A `design-lint` hook warns when slop patterns appear in code, and the `visual-qa` agent looks at rendered screenshots and **blocks the build** if it sees the fingerprint. Full rules live in `.claude/CLAUDE.md`.
 
-## Environment provisioning (so the app actually runs)
+### Environment provisioning — so the app actually runs
 
-Before runtime/E2E verification, a deterministic **provision** phase makes the app bootable, handling env vars by who can legitimately produce the value:
+Before testing, the tool makes the app bootable by filling in `.env`, handling variables by who can legitimately produce them:
+- **Auto-generated** — `JWT_SECRET`, `PORT`, `NODE_ENV`, etc. Filled with strong randoms / sensible defaults.
+- **Infrastructure** — `DATABASE_URL` and a seeded test user. It infers a local database from the stack (a SQLite file, or a local Postgres/MySQL via `docker compose`), runs migrations, and seeds a known login for the tests.
+- **External secrets** — Stripe/OpenAI/SMTP keys. It asks you once (hidden input) and writes them straight to `.env`; skipped ones get mocked in tests. `.env` is always git-ignored.
 
-- **Generated** (`JWT_SECRET`, `SESSION_SECRET`, `PORT`, `BASE_URL`, `NODE_ENV`) — code fills these with strong randoms / localhost defaults. No human needed.
-- **Infra + fixtures** (`DATABASE_URL`, `TEST_USER_EMAIL/PASSWORD`) — the harness infers a local DB URL from the stack (SQLite file, or `docker compose up -d` for Postgres/MySQL), runs migrations, and runs the backend's seed script that creates a **known test user** the E2E agent logs in with.
-- **External secrets** (`STRIPE_SECRET_KEY`, `OPENAI_API_KEY`, `SMTP_PASSWORD`, OAuth) — only you can supply a valid one. Discovery **declares them by name** in `scope.yaml` (never values); the harness then prompts you **once, up front, with masked input** and writes them straight to `.env`. The raw value never enters any agent's context or transcript. On a non-interactive run (`-y`) or for any secret you skip, the E2E agent **mocks** that service at the network layer, so the build still completes unattended.
+### Memory — it learns across builds
 
-`.env` is always added to `.gitignore` and never committed. Existing `.env` keys are never overwritten (idempotent, resume-safe).
+- **Per project:** `<project>/.workflow/` holds the plan, design system, API contract, and reports — the single source of truth agents coordinate through.
+- **Across projects:** `~/.claude/webdev-memory/` keeps quality benchmarks and recurring failure patterns, fed back into future builds so the tool improves over time.
 
-## Memory (file-based — replaces aimem)
+### Safety
 
-- **Project-local** `<target>/.workflow/` — `state.yaml`, `scope.yaml`, `semantic-registry.yaml`, `api-contracts.yaml`, `design-system/`, `reports/`. The coordination + handoff layer; the registry and contracts are the **single source of truth** the frontend builds against.
-- **Global vault** `~/.claude/webdev-memory/` — cross-project benchmarks (`p50/p75/p90`) and failure patterns, fed into the discovery and conductor prompts so each build learns from the last.
+Agents run on your machine and use real tools (git, npm, tests) — which is what building an app requires. Guardrails keep that safe: a hook blocks destructive shell commands and hardcoded secrets, `.env`/`.ssh` and similar are unreadable, edits default to a review-friendly permission mode, and all work happens on git branches so nothing is unrecoverable. Best used on your own projects.
 
-## The anti-slop design layer
+---
 
-The designer **must** run the design suite design-system-first (`ui-ux-pro-max --design-system` → `brand` → `design-system` tokens → `ui-styling`), publish tokens + a semantic registry, and the frontend may only use those names. The `design-lint` hook warns on the slop fingerprint as code is written; the `visual-qa` agent reads the rendered screenshots and **blocks** the build on banned patterns (Inter/Roboto default, purple-indigo gradient, three-card grid, uniform radius, 0.1-opacity shadows). See `.claude/CLAUDE.md` for the full design law.
+## For contributors
 
-## `.claude/` config
+To work on `webdev` itself:
 
-- `settings.json` — permissions + hook wiring.
-- `hooks/secret-guard.mjs` — PreToolUse: blocks destructive shell commands + hardcoded secrets.
-- `hooks/design-lint.mjs` — PostToolUse: warns on the slop fingerprint in written CSS/JSX.
-- `CLAUDE.md` — rules every agent inherits.
-- `skills/` — the bundled claudekit design suite (installed to `~/.claude/skills` via `install-skills`).
+```bash
+git clone https://github.com/Muhammad-Safiullah346/webdev-orchestrator.git
+cd webdev-orchestrator && npm install
+npm run webdev -- "build a notes app"   # run from the clone, no global install
+npm link                                # or expose `webdev` globally from your clone
+```
 
-During a build the orchestrator seeds the target project's `.claude/` with the hooks so the gates fire there too.
-
-## Deployment
-
-The harness is a one-shot CLI: each `webdev "..."` invocation runs a build to completion and exits (the *ephemeral* pattern from the Agent SDK hosting guide). There is no server to run — it is not a multi-tenant service.
-
-`npm link` it (or `npm i -g`) and run `webdev` in any project directory. It works immediately with whatever model auth you've exported. Agents operate directly on your project's files and run `git`/`npm`/test commands on the host — which is exactly what a build needs. The built-in guardrails (secret-guard hook, `.env`/`.ssh` deny rules, `acceptEdits` permission mode, per-branch git flow) keep that safe for building your own projects.
-
-## Layout
+Project layout:
 
 ```
 src/
-  cli.ts           # arg parse, mode detect, env wiring, skills installer
-  orchestrator.ts  # the PM — deterministic phase machine + retries/escalation
-  agents.ts        # 14 AgentDefinitions (scoped tools/models/skills)
-  modes.ts         # 7 modes → phase plans
-  models.ts        # model lanes — independent model per role (build≠review≠verify)
-  memory.ts        # file-based memory (project + global vault)
-  env.ts           # env provisioning (generated/infra/external secrets)
-  doctor.ts        # `webdev doctor` environment preflight
+  cli.ts           # command parsing, mode detection, env wiring
+  orchestrator.ts  # the controller — phase machine, retries, quality gate
+  agents.ts        # the 14 agent definitions (tools, models, skills)
+  modes.ts         # the 7 modes → phase plans
+  models.ts        # model lanes (build ≠ review ≠ verify)
+  memory.ts        # file-based memory (project + global)
+  env.ts           # environment provisioning
+  doctor.ts        # the `webdev doctor` health check
   verify.ts        # build/runtime/git helpers
-  seed.ts          # seeds target .claude with hooks
-  types.ts         # shared types
-  prompts/*.md     # the 14 agent system prompts (anti-slop baked in)
-.claude/           # settings, hooks, CLAUDE.md, design suite
-bin/webdev         # launcher (resolves tsx, runs src/cli.ts)
+  seed.ts          # seeds the target project's .claude with hooks
+  prompts/*.md     # the 14 agent system prompts
+.claude/           # settings, safety hooks, CLAUDE.md, the design suite
+bin/webdev         # the launcher
 ```
 
-MIT.
+Releases use `npm run release` (patch), `release:minor`, or `release:major` — it type-checks, bumps, publishes to npm, then pushes to GitHub (rolling back if publish fails).
+
+---
+
+MIT
