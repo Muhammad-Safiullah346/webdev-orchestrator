@@ -456,12 +456,22 @@ export class Orchestrator {
     this.log("🐞 Bugfix mode…");
     const branch = "bugfix/reported-issue";
     if (!this.cfg.noGit) await createBranch(this.cfg.target, branch);
+
+    // Provision the runtime env ONCE before the reproduce loop, so a RUNTIME
+    // bug (500s, DB/auth failures) can actually be reproduced — the app must
+    // boot for "reproduce → verify" to mean anything. Idempotent, so it's safe
+    // outside the retry loop. (Provisioning is skipped for --no-git single-file
+    // repos only if there's genuinely nothing to run; phaseProvision no-ops
+    // cleanly when the project has no backend/db.)
+    await this.phaseProvision(scope);
+
     let attempt = 0, ok = false;
     while (attempt < RETRY.bugfix && !ok) {
       attempt++;
       await this.runAgent("bugfix", [
         `Reported issue: ${this.cfg.request}`,
         `Follow the protocol: reproduce → trace → isolate → minimal fix → verify.`,
+        `The runtime env is provisioned (.env, database, migrations, seeded test user), so you CAN boot the app to reproduce a runtime bug — start it, hit the failing path, and confirm the fix end-to-end, not just by reading code.`,
       ].join("\n"));
       const build = await buildGate(this.cfg.target);
       ok = build.ok;
