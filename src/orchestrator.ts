@@ -17,8 +17,9 @@ import { planFor, type PhasePlan } from "./modes.ts";
 import { laneSummary } from "./models.ts";
 import { seedTargetClaude } from "./seed.ts";
 import {
-  exampleKeys, generateValue, inferDatabaseUrl, isInteractive,
-  looksExternal, mergeEnv, parseEnv, promptForSecrets, type EnvVar,
+  exampleEnv, exampleKeys, fallbackSqliteUrl, generateValue, isDbUrlName,
+  isGeneratableSecret, isInteractive, looksExternal, mergeEnv, parseEnv,
+  promptForSecrets, type EnvVar,
 } from "./env.ts";
 import {
   bootstrapGit, buildGate, commitAll, createBranch, mergeToDevelop,
@@ -245,48 +246,57 @@ export class Orchestrator {
     const cwd = this.cfg.target;
     const project = scope.project.name || "app";
 
-    // 1. Fill self-generable + db vars from the example (only missing keys).
-    const keys = exampleKeys(cwd);
+    // 1. Fill each declared var by CLASS — database-agnostic. We never guess a
+    //    database type: the app's own .env.example carries a working local
+    //    connection string as the sample value, and we honor it verbatim. This
+    //    works for Postgres, MySQL, Mongo, Redis, or anything else the agent
+    //    chose, without the harness enumerating database types.
+    const sample = exampleEnv(cwd);          // key → declared sample value
+    const keys = Object.keys(sample);
     const existing = parseEnv(join(cwd, ".env"));
     const generated: Record<string, string> = {};
-    let dbKind: ReturnType<typeof inferDatabaseUrl>["kind"] = "none";
 
     for (const key of keys) {
-      if (existing[key] !== undefined) continue;
-      if (/^(DATABASE_URL|DB_URL|POSTGRES_URL|MYSQL_URL)$/i.test(key)) {
-        const db = inferDatabaseUrl(scope.project.stack ?? "", project);
-        generated[key] = db.url;
-        dbKind = db.kind;
+      if (existing[key] !== undefined) continue;              // never overwrite a user value
+      if (isGeneratableSecret(key)) {
+        generated[key] = generateValue(key);                  // fresh random — ignore placeholder
       } else if (looksExternal(key)) {
-        // external secret — only set if the user supplied it; else leave for mock
-        if (this.collectedSecrets[key]) generated[key] = this.collectedSecrets[key];
+        if (this.collectedSecrets[key]) generated[key] = this.collectedSecrets[key]; // user-supplied only
+      } else if (sample[key] && sample[key] !== "" && !/^(changeme|xxx+|your[-_]|<.*>|placeholder|todo)$/i.test(sample[key])) {
+        generated[key] = sample[key];                         // honor the declared value (DB URLs, config)
       } else {
-        generated[key] = generateValue(key);
+        generated[key] = generateValue(key);                  // no usable sample → sensible default
       }
     }
     // Secrets the user supplied that weren't in the example get added too.
     for (const [k, v] of Object.entries(this.collectedSecrets)) generated[k] = v;
 
-    // If no example existed but a backend is in play, still ensure core vars.
+    // If no example existed but a backend is in play, seed core vars + a
+    // zero-service SQLite DB (safe default; the app can override in its own .env).
     if (!keys.length && scope.features.some((f) => f.agents.includes("backend"))) {
-      const db = inferDatabaseUrl(scope.project.stack ?? "", project);
-      dbKind = db.kind;
-      Object.assign(generated, { DATABASE_URL: db.url, NODE_ENV: "development", PORT: "3000" });
+      Object.assign(generated, {
+        DATABASE_URL: fallbackSqliteUrl(project),
+        NODE_ENV: "development",
+        PORT: "3000",
+      });
     }
 
     const added = mergeEnv(cwd, generated);
     if (added.length) this.log(`   .env: set ${added.length} var(s) [${maskList(added)}]`);
     await this.ensureEnvGitignored(cwd);
 
-    // 2. Stand up a local database if the project ships a docker-compose for it.
-    if (dbKind === "postgres" || dbKind === "mysql") {
-      if (existsSync(join(cwd, "docker-compose.yml")) || existsSync(join(cwd, "docker-compose.yaml"))) {
-        const up = await sh("docker compose up -d 2>&1 || docker-compose up -d 2>&1", { cwd, timeoutMs: 120_000 });
-        this.log(up.code === 0 ? "   database container up ✓" : "   ⚠ could not start db container (continuing)");
-        await sh("sleep 4", { cwd, timeoutMs: 8_000 }); // brief wait for readiness
-      } else {
-        this.log(`   ⚠ stack implies ${dbKind} but no docker-compose found — app may need an external DB`);
-      }
+    // 2. Stand up local backing services if the app ships a docker-compose —
+    //    ANY database/service (Postgres, MySQL, Mongo, Redis, …). We don't
+    //    inspect the image; the agent wrote compose for whatever it needs, we
+    //    just bring it up. A file: SQLite URL needs nothing, so no compose = fine.
+    const composeExists = existsSync(join(cwd, "docker-compose.yml")) || existsSync(join(cwd, "docker-compose.yaml"));
+    const needsService = keys.some((k) => isDbUrlName(k) && !/^file:|sqlite/i.test(generated[k] ?? existing[k] ?? ""));
+    if (composeExists && needsService) {
+      const up = await sh("docker compose up -d 2>&1 || docker-compose up -d 2>&1", { cwd, timeoutMs: 120_000 });
+      this.log(up.code === 0 ? "   backing services up ✓ (docker compose)" : "   ⚠ could not start services (continuing)");
+      await sh("sleep 4", { cwd, timeoutMs: 8_000 }); // brief wait for readiness
+    } else if (needsService && !composeExists) {
+      this.log("   ⚠ app declares a server-based datastore but ships no docker-compose — it may need an external service");
     }
 
     // 3. Run migrations + seed, using whatever scripts the project defines.

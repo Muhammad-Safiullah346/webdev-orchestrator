@@ -60,11 +60,20 @@ export function mergeEnv(target: string, kv: Record<string, string>): string[] {
 
 /** Parse the KEY names out of a .env.example (values ignored — they're samples). */
 export function exampleKeys(target: string): string[] {
+  return Object.keys(exampleEnv(target));
+}
+
+/** Parse the full key→value map from a .env.example. The VALUES matter: the
+ *  devops/backend agent writes a working local connection string as the value
+ *  (DATABASE_URL=postgres://…, MONGODB_URI=mongodb://localhost…, REDIS_URL=…).
+ *  Honoring that value is what makes provisioning work for ANY database without
+ *  the harness enumerating database types. */
+export function exampleEnv(target: string): Record<string, string> {
   for (const name of [".env.example", ".env.sample", ".env.template"]) {
     const p = join(target, name);
-    if (existsSync(p)) return Object.keys(parseEnv(p));
+    if (existsSync(p)) return parseEnv(p);
   }
-  return [];
+  return {};
 }
 
 // ── value generation for the "generated" class ──────────────────────────────
@@ -86,17 +95,26 @@ export function looksExternal(name: string): boolean {
   return /(STRIPE|OPENAI|ANTHROPIC|SENDGRID|TWILIO|AWS_|S3_|GITHUB_|GOOGLE_|OAUTH|CLIENT_SECRET|SMTP_PASS|MAILGUN|PAYPAL|FIREBASE|SUPABASE_SERVICE)/i.test(name);
 }
 
-// ── DATABASE_URL for the "infra" class ───────────────────────────────────────
+/** Is this a locally-generatable secret (JWT/session/salt/etc.)? Such vars must
+ *  be freshly randomized — never copied from an example placeholder like
+ *  "changeme". Distinct from `looksExternal` (user-supplied) and from plain
+ *  config/URLs (whose declared example value we honor verbatim). */
+export function isGeneratableSecret(name: string): boolean {
+  if (looksExternal(name)) return false;
+  const n = name.toUpperCase();
+  if (/PUBLIC/.test(n)) return false; // public keys/URLs aren't secrets
+  return /(SECRET|JWT|SALT|SESSION|ENCRYPT|COOKIE|PRIVATE_KEY|_TOKEN$|^TOKEN$|PASSWORD)/.test(n);
+}
 
-export function inferDatabaseUrl(stack: string, dbName: string): { url: string; kind: "sqlite" | "postgres" | "mysql" | "none" } {
-  const s = (stack ?? "").toLowerCase();
-  if (/sqlite|better-sqlite|file:|libsql/.test(s)) return { url: `file:./${dbName}.db`, kind: "sqlite" };
-  if (/postgres|pg\b|prisma.*postgres|supabase|neon/.test(s)) {
-    return { url: `postgresql://postgres:postgres@localhost:5432/${dbName}`, kind: "postgres" };
-  }
-  if (/mysql|mariadb|planetscale/.test(s)) return { url: `mysql://root:root@localhost:3306/${dbName}`, kind: "mysql" };
-  // No clear relational signal → default to sqlite (zero external service).
-  return { url: `file:./${dbName}.db`, kind: "sqlite" };
+/** Zero-service fallback DB when the app declares no database of its own. */
+export function fallbackSqliteUrl(dbName: string): string {
+  return `file:./${dbName || "app"}.db`;
+}
+
+/** Does this var name look like a database/backing-store connection string?
+ *  Used only to decide whether the no-example fallback should seed one. */
+export function isDbUrlName(name: string): boolean {
+  return /^(DATABASE_URL|DB_URL|POSTGRES_URL|MYSQL_URL|MONGO(DB)?_URI?|MONGO_URL|REDIS_URL|DATABASE_URI|DB_CONNECTION|CONNECTION_STRING|NEO4J_URI|CASSANDRA_|SQLITE_)/i.test(name);
 }
 
 // ── masked interactive prompt for the "external" class ───────────────────────

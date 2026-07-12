@@ -201,7 +201,7 @@ Generic AI output has a "fingerprint" — Inter font, a purple-to-blue gradient,
 
 Before testing, the tool makes the app bootable by filling in `.env`, handling variables by who can legitimately produce them:
 - **Auto-generated** — `JWT_SECRET`, `PORT`, `NODE_ENV`, etc. Filled with strong randoms / sensible defaults.
-- **Infrastructure** — `DATABASE_URL` and a seeded test user. It infers a local database from the stack (a SQLite file, or a local Postgres/MySQL via `docker compose`), runs migrations, and seeds a known login for the tests.
+- **Infrastructure** — the database connection and a seeded test user. This is **database-agnostic**: the app declares a working local connection string in its own `.env.example` (Postgres, MySQL, MongoDB, Redis, SQLite — whatever it uses), and the harness honors that value verbatim, brings up any server-based datastore via the app's `docker-compose.yml`, runs migrations, and seeds a known login. Apps with no database of their own fall back to a zero-service SQLite file.
 - **External secrets** — Stripe/OpenAI/SMTP keys. It asks you once (hidden input) and writes them straight to `.env`; skipped ones get mocked in tests. `.env` is always git-ignored.
 
 ### Deployment — the app comes out deploy-ready
