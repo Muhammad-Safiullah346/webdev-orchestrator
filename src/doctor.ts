@@ -73,6 +73,38 @@ export function runDoctor(): number {
     detail: py ? `${py} (design-suite scripts available)` : "not found — design-suite search scripts won't run; install Python 3 to enable",
   });
 
+  // Docker + compose (conditional — only apps with a SERVER-based database need
+  // it). SQLite and static apps need nothing here, so absence is a warning, not
+  // a failure. Provisioning runs `docker compose up` for a server DB, so we
+  // check the compose SUBCOMMAND too: Docker can be installed while the
+  // compose-v2 plugin is missing, which passes a naive `docker --version` check
+  // but fails the actual command.
+  const dv = tryCmd("docker", ["--version"]);
+  const hasCompose = dv
+    ? (tryCmd("docker", ["compose", "version"]) !== null || tryCmd("docker-compose", ["--version"]) !== null)
+    : false;
+  checks.push({
+    label: "Docker",
+    status: dv && hasCompose ? "ok" : "warn",
+    detail: !dv
+      ? "not found — only needed if your app uses a server-based database (Postgres/MySQL/Mongo/Redis). SQLite and static apps don't need it."
+      : hasCompose
+        ? `${dv} + compose (server-based databases can run locally)`
+        : `${dv} but 'docker compose' is unavailable — install the Compose v2 plugin, or server-based DB provisioning will fail.`,
+  });
+
+  // curl — the runtime boot-probe uses it to check the app is serving HTTP.
+  // Without it the probe can't confirm the app booted (server-based apps only;
+  // static/library builds don't run a probe).
+  const cv = tryCmd("curl", ["--version"]);
+  checks.push({
+    label: "curl",
+    status: cv ? "ok" : "warn",
+    detail: cv
+      ? `${(cv.split("\n")[0] || "curl").slice(0, 40)} (boot probe can verify the app serves)`
+      : "not found — the runtime boot-probe needs curl to confirm the app started; install curl if you build server apps.",
+  });
+
   // Design suite installed into ~/.claude/skills?
   const skillsDir = join(homedir(), ".claude", "skills");
   const required = ["ui-ux-pro-max", "design-system", "brand", "ui-styling"];
