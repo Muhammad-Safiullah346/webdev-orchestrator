@@ -18,8 +18,8 @@ import { laneSummary } from "./models.ts";
 import { seedTargetClaude } from "./seed.ts";
 import {
   exampleEnv, exampleKeys, fallbackSqliteUrl, generateValue, isDbUrlName,
-  isGeneratableSecret, isInteractive, looksExternal, mergeEnv, parseEnv,
-  promptForSecrets, type EnvVar,
+  isGeneratableSecret, isInteractive, isRemoteDbUrl, localizeDbUrl,
+  looksExternal, mergeEnv, parseEnv, promptForSecrets, type EnvVar,
 } from "./env.ts";
 import {
   bootstrapGit, buildGate, commitAll, createBranch, mergeToDevelop,
@@ -263,7 +263,16 @@ export class Orchestrator {
       } else if (looksExternal(key)) {
         if (this.collectedSecrets[key]) generated[key] = this.collectedSecrets[key]; // user-supplied only
       } else if (sample[key] && sample[key] !== "" && !/^(changeme|xxx+|your[-_]|<.*>|placeholder|todo)$/i.test(sample[key])) {
-        generated[key] = sample[key];                         // honor the declared value (DB URLs, config)
+        // Honor the declared value (DB URLs, config) — but NEVER test against a
+        // remote/managed datastore. If a DB URL points off-box (Atlas, Neon,
+        // PlanetScale, a real host), rewrite it to a local equivalent so the
+        // destructive migrate + seed can't touch the user's real database.
+        if (isDbUrlName(key) && isRemoteDbUrl(sample[key])) {
+          generated[key] = localizeDbUrl(sample[key], project);
+          this.log(`   ⚠ ${key} pointed at a remote datastore — localized for testing (your managed DB is untouched)`);
+        } else {
+          generated[key] = sample[key];
+        }
       } else {
         generated[key] = generateValue(key);                  // no usable sample → sensible default
       }

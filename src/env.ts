@@ -117,6 +117,41 @@ export function isDbUrlName(name: string): boolean {
   return /^(DATABASE_URL|DB_URL|POSTGRES_URL|MYSQL_URL|MONGO(DB)?_URI?|MONGO_URL|REDIS_URL|DATABASE_URI|DB_CONNECTION|CONNECTION_STRING|NEO4J_URI|CASSANDRA_|SQLITE_)/i.test(name);
 }
 
+/** Does this connection string point at a REMOTE / managed datastore (Atlas,
+ *  Neon, PlanetScale, Upstash, a LAN/cloud host…) rather than a local one?
+ *  Testing must never run against a remote DB — it's destructive (migrations +
+ *  seed). Local forms (`localhost`, `127.0.0.1`, a bare docker-compose service
+ *  name, or a `file:`/SQLite path) are safe; anything else is treated as remote. */
+export function isRemoteDbUrl(value: string): boolean {
+  if (!value) return false;
+  const v = value.trim();
+  if (/^file:|^sqlite/i.test(v)) return false;             // file-based → never remote
+  if (/\+srv:\/\//i.test(v)) return true;                  // mongodb+srv → managed cluster
+  const host = (v.match(/^[a-z0-9+.\-]+:\/\/(?:[^@/]*@)?([^:/?#]+)/i)?.[1] ?? "").toLowerCase();
+  if (!host) return false;
+  if (["localhost", "127.0.0.1", "0.0.0.0", "::1", "host.docker.internal"].includes(host)) return false;
+  // A fully-qualified domain or IP (contains a dot) that isn't localhost → remote.
+  // A bare single-label host (e.g. compose service "db"/"mongo") is local-ish.
+  return host.includes(".");
+}
+
+/** Rewrite a remote DB connection string to an equivalent LOCAL one — same
+ *  scheme and database name, host forced to localhost with the scheme's default
+ *  port, credentials/SRV dropped — so a Mongo/Postgres/etc. app still boots and
+ *  tests locally without ever touching the user's managed database. */
+export function localizeDbUrl(value: string, dbName: string): string {
+  const v = value.trim();
+  const scheme = (v.match(/^([a-z0-9+.\-]+):\/\//i)?.[1] ?? "").toLowerCase().replace("+srv", "");
+  const defaultPort: Record<string, number> = {
+    mongodb: 27017, postgres: 5432, postgresql: 5432, mysql: 3306,
+    mariadb: 3306, redis: 6379, neo4j: 7687, "bolt": 7687,
+  };
+  const path = v.match(/^[a-z0-9+.\-]+:\/\/(?:[^@/]*@)?[^/?#]+(\/[^?#]*)?/i)?.[1] ?? `/${dbName || "app"}`;
+  const port = defaultPort[scheme];
+  if (!scheme) return fallbackSqliteUrl(dbName);           // unparseable → safe SQLite fallback
+  return `${scheme}://localhost${port ? `:${port}` : ""}${path || `/${dbName || "app"}`}`;
+}
+
 // ── masked interactive prompt for the "external" class ───────────────────────
 
 export function isInteractive(nonInteractive: boolean): boolean {
