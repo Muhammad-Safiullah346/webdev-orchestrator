@@ -125,8 +125,15 @@ export class Orchestrator {
       score = await this.phaseConductorLoop(scope);
     }
 
-    // 9. Release
     const passed = !score || score.decision === "pass";
+
+    // 9. Deploy config — only for a passing build. Runs on the FINISHED app so
+    // devops can wire frontend↔backend and produce coherent deploy artifacts.
+    if (passed && this.plan.deploy && !this.plan.analysisOnly) {
+      await this.phaseDeploy(scope);
+    }
+
+    // 10. Release
     if (passed && !this.cfg.noGit && !this.plan.analysisOnly) {
       const tag = nextTag(scope);
       await releaseToMain(this.cfg.target, tag);
@@ -362,6 +369,26 @@ export class Orchestrator {
       `Set up Playwright if needed, run end-to-end tests of the user flows on the running app,`,
       `and capture screenshots into .workflow/reports/screenshots/ at desktop/tablet/mobile.`,
       `Write results to .workflow/reports/e2e.md.`,
+    ].join("\n"));
+    this.log("");
+  }
+
+  private async phaseDeploy(scope: Scope): Promise<void> {
+    this.mem.setPhase("deploy");
+    this.log("🚀 Deploy phase: generating deploy config + wiring + DEPLOY.md (no credentials, nothing deployed)…");
+    await this.runAgent("devops", [
+      `The app is BUILT and has passed the quality gate. Produce everything needed to DEPLOY it — config only, do not deploy anything and do not ask for cloud credentials.`,
+      `Project: ${scope.project.name} (${scope.project.stack ?? "unknown stack"}).`,
+      ``,
+      `You are looking at the FINISHED app, so you can now wire the pieces together:`,
+      `1. Decide the best-fit deploy target for each component (frontend, backend, database, integrations) from the actual stack — you choose the platforms.`,
+      `2. Generate the platform deploy config for each component.`,
+      `3. WIRE THEM: set the frontend's API base URL to the backend's deployed URL, configure CORS, and list the exact env vars each side needs in each environment.`,
+      `4. Write DEPLOY.md: precise step-by-step instructions the user follows to deploy (accounts to create, buttons/commands, which secrets to set where).`,
+      `5. Add a deploy-on-push CD workflow that uses secrets the USER adds to their repo settings (reference them by name; never embed a real value).`,
+      ``,
+      `Production database + third-party keys are the user's to supply — document them as required secrets/connection strings in DEPLOY.md; never invent or commit values.`,
+      `Write a summary to .workflow/reports/deploy.md.`,
     ].join("\n"));
     this.log("");
   }

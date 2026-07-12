@@ -20,6 +20,9 @@ export interface PhasePlan {
   visualQa: boolean;
   /** Conductor quality gate. */
   conductor: boolean;
+  /** Deploy phase: after the gate passes, devops generates deploy config +
+   *  frontend↔backend wiring + DEPLOY.md + CD for the finished app. */
+  deploy: boolean;
   /** Iteration mode must protect existing behavior. */
   regressionCheck: boolean;
   /** Audit mode produces reports only — no code changes, no merge to main. */
@@ -39,6 +42,7 @@ export function planFor(mode: Mode, fast: boolean): PhasePlan {
     e2e: !fast,
     visualQa: !fast,
     conductor: true,
+    deploy: false,
     regressionCheck: false,
     analysisOnly: false,
     summary: "",
@@ -47,13 +51,14 @@ export function planFor(mode: Mode, fast: boolean): PhasePlan {
 
   switch (mode) {
     case "greenfield":
-      return base({ summary: "New build from scratch → full pipeline → tagged release." });
+      return base({ deploy: true, summary: "New build from scratch → full pipeline → deploy config → tagged release." });
 
     case "iteration":
       return base({
         reviewWave: ["qa", "security"], // lighter review for additions
         regressionCheck: true,
-        summary: "Add features to an existing app, guarding against regressions → point release.",
+        deploy: true,
+        summary: "Add features to an existing app, guarding against regressions → refresh deploy config → point release.",
       });
 
     case "bugfix":

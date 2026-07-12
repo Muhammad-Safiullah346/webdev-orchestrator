@@ -77,10 +77,12 @@ A build is **interactive and visible** — it's not a black box, and it may paus
 1. **It may ask a couple of questions first.** If your request is ambiguous about something important (should it have user accounts? a database?), it asks up to a few quick questions. If your request is clear, it just proceeds.
 2. **It may ask for secret keys once.** If the app needs a third-party service (Stripe, OpenAI, email…), it prompts you **once**, with hidden input, for those keys — or you can skip and it will mock that service in tests. (Your own model key from step 2 is separate and never re-asked.)
 3. **It works through phases, printing progress** — scoping, designing, building each feature, testing, reviewing, and a final quality score. This can take a while for a full app.
-4. **You get a working app on clean git branches.** Features are built on `feature/*` branches and merged to `develop`; when the quality gate passes, `develop` merges to `main` with a version tag. Use `--no-git` to skip all git handling.
+4. **It makes the app deploy-ready** (new apps and feature additions). Once the quality gate passes, the devops agent looks at the finished app, picks a sensible target for each piece (frontend, backend, database), generates the platform config, **wires the frontend to the backend** (API URL, CORS, per-side env vars), and writes a step-by-step `DEPLOY.md` plus a deploy-on-push CD workflow. It never deploys for you and never asks for your cloud credentials — you run the final step (or add repo secrets for CD). This removes the usual "now how do I actually ship this?" headache.
+5. **You get a working app on clean git branches.** Features are built on `feature/*` branches and merged to `develop`; when the quality gate passes, `develop` merges to `main` with a version tag. Use `--no-git` to skip all git handling.
 
 **Where things end up:**
 - Your **app code** — written directly into the project folder.
+- **`DEPLOY.md`** — a step-by-step guide to deploying the app (which platforms, which secrets go where, in what order), plus platform config files and a CD workflow.
 - **`.workflow/`** — the build's working memory: the plan (`scope.yaml`), the design system, the API contract, and every agent's report under `.workflow/reports/`. If a build stops early, this is where to look.
 - **`.env`** — created with working local values so the app actually runs; always git-ignored, never committed.
 
@@ -156,6 +158,7 @@ discovery → [feature waves: designer → backend → frontend → docs/devops]
           → review wave (QA · security · code-review · performance)
           → runtime + browser tests → visual review (anti-slop gate)
           → quality gate (loops targeted fixes until score ≥ threshold)
+          → deploy config (platform config + frontend↔backend wiring + DEPLOY.md + CD)
           → merge to main, tag a release
 ```
 
@@ -200,6 +203,16 @@ Before testing, the tool makes the app bootable by filling in `.env`, handling v
 - **Auto-generated** — `JWT_SECRET`, `PORT`, `NODE_ENV`, etc. Filled with strong randoms / sensible defaults.
 - **Infrastructure** — `DATABASE_URL` and a seeded test user. It infers a local database from the stack (a SQLite file, or a local Postgres/MySQL via `docker compose`), runs migrations, and seeds a known login for the tests.
 - **External secrets** — Stripe/OpenAI/SMTP keys. It asks you once (hidden input) and writes them straight to `.env`; skipped ones get mocked in tests. `.env` is always git-ignored.
+
+### Deployment — the app comes out deploy-ready
+
+After a build passes the quality gate (greenfield and iteration modes), a dedicated **deploy phase** runs. Because it sees the *finished* app, the devops agent can do the part that's normally a headache — connecting a separately-deployed frontend and backend. It:
+- **Picks a target per component** from the actual stack — a static/edge host for the frontend (Vercel, Netlify, Cloudflare Pages…), a container host for a standalone backend (the Dockerfile runs on Railway/Render/Fly/any VM), and a managed provider for the database (Neon, Supabase, PlanetScale, Atlas…). It chooses; it doesn't ask.
+- **Wires them together** — sets the frontend's API base URL to the backend's deployed URL, configures CORS, and lists exactly which env vars each side needs in each environment.
+- **Writes `DEPLOY.md`** — an ordered, do-this-then-that walkthrough (accounts, commands/clicks, which secret goes where).
+- **Sets up CD** — a deploy-on-push workflow that uses secrets *you* add to your repo settings.
+
+**The boundary:** it generates config and instructions only. It never runs a deploy and never touches your cloud credentials — the production database URL and third-party keys are yours to supply, documented in `DEPLOY.md` as required secrets. So the app is "deploy-ready in one guided step," not "deployed for you."
 
 ### Memory — it learns across builds
 
