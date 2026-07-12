@@ -23,7 +23,7 @@ import {
 } from "./env.ts";
 import {
   bootstrapGit, buildGate, commitAll, createBranch, mergeToDevelop,
-  releaseToMain, sh,
+  releaseToMain, runtimeProbe, sh,
 } from "./verify.ts";
 
 // Retry ceilings before escalating to the user.
@@ -360,16 +360,32 @@ export class Orchestrator {
 
   private async phaseRuntime(): Promise<void> {
     this.mem.setPhase("runtime");
-    this.log("▶️  Runtime verification…");
+    this.log("▶️  Runtime verification (build, then boot + probe)…");
+    const port = Number(parseEnv(join(this.cfg.target, ".env")).PORT) || 3000;
     let attempt = 0;
     while (attempt < RETRY.runtime) {
+      // Gate 1: it must compile.
       const build = await buildGate(this.cfg.target);
-      if (build.ok) { this.log("   build ✓\n"); return; }
+      if (!build.ok) {
+        attempt++;
+        this.log(`   build failed (attempt ${attempt}/${RETRY.runtime}) — dispatching bugfix`);
+        await this.dispatchBugfix(`Build failed.\n\n${build.detail}`, `runtime-build-${attempt}`);
+        continue;
+      }
+      this.log("   build ✓");
+
+      // Gate 2: it must actually boot and serve — this is where a bad DB
+      // connection / startup crash surfaces, before the heavier E2E phase.
+      const probe = await runtimeProbe(this.cfg.target, port);
+      if (probe.ok) { this.log(`   ${probe.detail}\n`); return; }
       attempt++;
-      this.log(`   build failed (attempt ${attempt}/${RETRY.runtime}) — dispatching bugfix`);
-      await this.dispatchBugfix(`Runtime/build verification failed.\n\n${build.detail}`, `runtime-${attempt}`);
+      this.log(`   boot probe failed (attempt ${attempt}/${RETRY.runtime}) — dispatching bugfix`);
+      await this.dispatchBugfix(
+        `The app builds but fails to boot/serve on :${port} — likely a database-connection or startup error.\n\n${probe.detail}`,
+        `runtime-boot-${attempt}`,
+      );
     }
-    await this.escalate("runtime", "Build still failing after max retries. See .workflow/reports/.");
+    await this.escalate("runtime", "App still not building/booting after max retries. See .workflow/reports/.");
   }
 
   private async phaseE2E(): Promise<void> {

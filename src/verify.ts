@@ -90,6 +90,61 @@ export async function buildGate(cwd: string): Promise<PhaseResult> {
   };
 }
 
+/** Best-effort command to START the built app (not build it). start > dev. */
+export function detectStartCommand(cwd: string): string | null {
+  const scripts = readPkgScripts(cwd);
+  if (scripts.start) return "npm run start";
+  if (scripts.dev) return "npm run dev";
+  return null;
+}
+
+/**
+ * Runtime probe: actually BOOT the app and confirm it serves HTTP, then stop it.
+ * This catches "compiles but crashes on boot" — most importantly a failed
+ * database connection at startup — before the heavier E2E phase. The server is
+ * backgrounded in its own process group, polled for readiness, and always
+ * killed (so it can never hang the build). A response of ANY status (even 404)
+ * proves the server came up; only a total failure-to-listen is a failure.
+ *
+ * Returns ok:true (skipped) when there's no start command or no reachable port
+ * concept — a static site or library has nothing to boot, which is not a fault.
+ */
+export async function runtimeProbe(cwd: string, port: number): Promise<PhaseResult> {
+  const startCmd = detectStartCommand(cwd);
+  if (!startCmd) return { phase: "runtime-probe", ok: true, detail: "no start command (skipped)" };
+
+  // One self-contained bash script: launch in a new process group, poll the
+  // port for up to ~40s, capture logs, then kill the whole group unconditionally.
+  const script = `
+set -m
+: > /tmp/webdev-run.log
+( ${startCmd} > /tmp/webdev-run.log 2>&1 ) &
+APP_PID=$!
+ready=0
+for i in $(seq 1 40); do
+  if ! kill -0 "$APP_PID" 2>/dev/null; then break; fi   # process died → stop polling
+  if curl -sf -o /dev/null "http://localhost:${port}" 2>/dev/null \
+     || curl -s -o /dev/null -w '%{http_code}' "http://localhost:${port}" 2>/dev/null | grep -qE '^[1-5][0-9][0-9]$'; then
+    ready=1; break
+  fi
+  sleep 1
+done
+kill -TERM -"$APP_PID" 2>/dev/null || kill "$APP_PID" 2>/dev/null || true
+sleep 1
+kill -KILL -"$APP_PID" 2>/dev/null || true
+if [ "$ready" = "1" ]; then echo "__PROBE_OK__"; else echo "__PROBE_FAIL__"; tail -c 1500 /tmp/webdev-run.log; fi
+`;
+  const res = await sh(script, { cwd, timeoutMs: 90_000 });
+  const ok = res.stdout.includes("__PROBE_OK__");
+  return {
+    phase: "runtime-probe",
+    ok,
+    detail: ok
+      ? `app booted and served on :${port} ✓`
+      : `app failed to serve on :${port} within timeout (often a DB-connection or startup crash):\n${tail(res.stdout, 1500)}`,
+  };
+}
+
 // ── Git orchestration ────────────────────────────────────────────────────────
 
 export async function isGitRepo(cwd: string): Promise<boolean> {
