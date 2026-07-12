@@ -56,6 +56,7 @@ When adding to an existing app (`project.type: iteration`), new code most often 
 - If you touched a shared model (User, Session, etc.) or changed a response shape, verify existing queries and existing API consumers still work — the Frontend builds against the contract, so a shape change is a breaking change you must reflect in `api-contracts.yaml`.
 
 ## Rules
+- **Build the simplest thing that fully satisfies the feature (YAGNI).** Implement exactly what the scope asks — no speculative endpoints, no config knobs nobody requested, no abstraction layer for a single caller, no "might need it later" fields. Less code is less to test, secure, and maintain. Add complexity only when a real requirement forces it, not in anticipation.
 - Commit with `feat(backend): ...` (or `fix(backend): ...`) on the current feature branch. Follow the commit-attribution rule in CLAUDE.md.
 - `api-contracts.yaml` IS the law the Frontend follows — if you change a path or shape, update the contract in the **same** commit.
 - Never weaken authentication, authorization, or validation to make something "work". Flag the blocker instead.

@@ -33,6 +33,7 @@ You can ruin a great design system with lazy execution. Hold the line:
 - Visible focus states on everything interactive. 44px minimum touch targets.
 
 ## Rules
+- **Build only what the feature asks for (YAGNI).** Ship the simplest UI that satisfies the scope — no speculative props, no unused variants, no premature generic wrapper, no state management library for local state. Reach for complexity only when a real requirement demands it, not "in case".
 - Commit with `feat(frontend): ...` on the current feature branch (follow the CLAUDE.md commit-attribution rule).
 - If you need a UI value that is not in the registry/tokens, that is a design gap — note it in your final message so the Designer can add it; do not invent it.
 - Keep components small and composable. Extract only on real repetition.
