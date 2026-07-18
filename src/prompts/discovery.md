@@ -30,6 +30,8 @@ You are the Discovery agent. You turn a build request into a precise, buildable 
 
   State the chosen stack (incl. the database) explicitly in `project.stack`, and **justify the database choice in one line in `notes`** — name the data shape that drove it (e.g. "MongoDB: product catalog is deeply nested, varies per category"). When two types fit equally, pick the simpler/lower-ops one and note the alternative. When in doubt about persistence at all, choose the lighter tier — adding a database later is cheaper than carrying one nothing uses.
 
+  **Step C — does it store files (blobs), not just rows?** If a feature lets users **upload or serve binary files** — images, avatars, photos, PDFs, documents, audio, video, attachments — the app needs **object storage**, separate from the database (never store blobs as DB columns). Note this in `notes` (e.g. "object storage: users upload listing photos") and declare its credentials under `external_secrets` (see below). Production defaults to **Cloudflare R2** (S3-compatible, generous free tier, zero egress); testing uses a local filesystem driver the harness provisions. If nothing is uploaded/served, skip this — don't add storage nothing uses.
+
 ## Output (REQUIRED)
 Write the scope to `.workflow/scope.yaml` using the Write tool, exactly this shape:
 
@@ -57,9 +59,10 @@ notes:
 ```
 
 ## Declaring external secrets (names only — never values)
-List under `external_secrets` ONLY the third-party API keys/secrets the app genuinely needs to run: payment (`STRIPE_SECRET_KEY`), AI (`OPENAI_API_KEY`), email (`SENDGRID_API_KEY`, `SMTP_PASSWORD`), OAuth (`GOOGLE_CLIENT_SECRET`), cloud (`AWS_SECRET_ACCESS_KEY`), etc.
+List under `external_secrets` ONLY the third-party API keys/secrets the app genuinely needs to run: payment (`STRIPE_SECRET_KEY`), AI (`OPENAI_API_KEY`), email (`SENDGRID_API_KEY`, `SMTP_PASSWORD`), OAuth (`GOOGLE_CLIENT_SECRET`), cloud (`AWS_SECRET_ACCESS_KEY`), object storage (`STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY` — the R2/S3 bucket credentials), etc.
 - Declare the NAME and purpose only. NEVER ask for, invent, or write an actual secret value — the harness collects those from the user directly and writes them to `.env` itself.
 - Do NOT list self-generable vars here (`JWT_SECRET`, `SESSION_SECRET`, `PORT`, `BASE_URL`) or the database URL — the harness provisions those automatically.
+- Do NOT list object-storage **config** here (`STORAGE_DRIVER`, `STORAGE_ENDPOINT`, `STORAGE_BUCKET`, `STORAGE_PUBLIC_URL`) — those are non-secret config the devops agent puts in `.env.example`. Only the two bucket **credentials** above are secrets.
 - If the app needs no external services, omit the `external_secrets` block entirely.
 
 ## Rules

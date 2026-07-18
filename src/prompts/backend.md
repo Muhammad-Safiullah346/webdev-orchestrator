@@ -24,6 +24,13 @@ You build in whatever stack the scope names (`.workflow/scope.yaml` → `project
 - Choose types deliberately: money as integer cents or decimal (never float), timestamps as UTC, enums/check-constraints for fixed sets. Model relationships explicitly (one-to-many via FK, many-to-many via a join table).
 - Prefer NOT NULL with sensible defaults over nullable columns; a nullable column is a decision, not a default.
 
+## File uploads / object storage
+When a feature handles binary files (images, avatars, PDFs, audio, video, attachments), never store the blob in the database — put it in **object storage** behind a thin adapter selected by the `STORAGE_DRIVER` env var, so the same code runs locally and in production:
+- `STORAGE_DRIVER=local` → read/write files under `STORAGE_LOCAL_DIR` (a local directory the harness provisions for tests). This is the driver verification runs against.
+- `STORAGE_DRIVER=s3` → an S3-compatible client pointed at `STORAGE_ENDPOINT` with `STORAGE_BUCKET` + credentials (`STORAGE_ACCESS_KEY_ID`/`STORAGE_SECRET_ACCESS_KEY`). One code path serves Cloudflare R2 (the production default), AWS S3, and Backblaze B2 — don't couple to a vendor SDK.
+
+Rules: validate file **type and size at the boundary** — never trust the client's Content-Type or extension; verify by magic bytes and cap the size. **Stream** to/from storage, don't buffer whole files in memory. Store only the object **key** in the DB (never the bytes); serve via a presigned URL or a redirect to `STORAGE_PUBLIC_URL`. Namespace keys per-user/per-resource so one user can't read another's objects. List every `STORAGE_*` var you read in `.env.example`.
+
 ## Migrations — the #1 source of broken builds. Gate every one.
 Before you consider a migration done, verify ALL of:
 - [ ] It runs forward cleanly on a fresh database **and** on a database that already has data.

@@ -92,7 +92,7 @@ export function generateValue(name: string): string {
 
 /** Heuristic: is this var name an external third-party secret? */
 export function looksExternal(name: string): boolean {
-  return /(STRIPE|OPENAI|ANTHROPIC|SENDGRID|TWILIO|AWS_|S3_|GITHUB_|GOOGLE_|OAUTH|CLIENT_SECRET|SMTP_PASS|MAILGUN|PAYPAL|FIREBASE|SUPABASE_SERVICE)/i.test(name);
+  return /(STRIPE|OPENAI|ANTHROPIC|SENDGRID|TWILIO|AWS_|S3_|^R2_|GITHUB_|GOOGLE_|OAUTH|CLIENT_SECRET|SMTP_PASS|MAILGUN|PAYPAL|FIREBASE|SUPABASE_SERVICE|_ACCESS_KEY_ID|_SECRET_ACCESS_KEY)/i.test(name);
 }
 
 /** Is this a locally-generatable secret (JWT/session/salt/etc.)? Such vars must
@@ -115,6 +115,15 @@ export function fallbackSqliteUrl(dbName: string): string {
  *  Used only to decide whether the no-example fallback should seed one. */
 export function isDbUrlName(name: string): boolean {
   return /^(DATABASE_URL|DB_URL|POSTGRES_URL|MYSQL_URL|MONGO(DB)?_URI?|MONGO_URL|REDIS_URL|DATABASE_URI|DB_CONNECTION|CONNECTION_STRING|NEO4J_URI|CASSANDRA_|SQLITE_)/i.test(name);
+}
+
+/** Does the app declare object storage (S3/R2/B2 for images, PDFs, video…)?
+ *  Detected purely from the declared env-var names — no app-code inspection.
+ *  The provision phase uses this to force a LOCAL storage driver for testing so
+ *  verification never touches (or bills) the user's real bucket — the storage
+ *  analogue of `isRemoteDbUrl` + `localizeDbUrl`. */
+export function usesObjectStorage(keys: string[]): boolean {
+  return keys.some((k) => /^STORAGE_|^R2_|_BUCKET$/i.test(k));
 }
 
 /** Does this connection string point at a REMOTE / managed datastore (Atlas,

@@ -8,7 +8,7 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import YAML from "yaml";
 import { join } from "node:path";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import type { AgentDefinition } from "@anthropic-ai/claude-agent-sdk";
 import type { AgentName, ConductorScore, Feature, RunConfig, Scope } from "./types.ts";
 import { buildAgents } from "./agents.ts";
@@ -19,7 +19,8 @@ import { seedTargetClaude } from "./seed.ts";
 import {
   exampleEnv, exampleKeys, fallbackSqliteUrl, generateValue, isDbUrlName,
   isGeneratableSecret, isInteractive, isRemoteDbUrl, localizeDbUrl,
-  looksExternal, mergeEnv, parseEnv, promptForSecrets, type EnvVar,
+  looksExternal, mergeEnv, parseEnv, promptForSecrets, usesObjectStorage,
+  type EnvVar,
 } from "./env.ts";
 import {
   bootstrapGit, buildGate, commitAll, createBranch, mergeToDevelop,
@@ -280,6 +281,17 @@ export class Orchestrator {
     // Secrets the user supplied that weren't in the example get added too.
     for (const [k, v] of Object.entries(this.collectedSecrets)) generated[k] = v;
 
+    // Object storage: FORCE the local driver for testing so verification never
+    // touches (or bills) the user's real bucket — the storage analogue of
+    // localizing a remote DB URL. Overrides any `s3` sample, but respects a
+    // driver the user already pinned in .env (idempotent/resume-safe).
+    if (usesObjectStorage(keys) && existing.STORAGE_DRIVER === undefined) {
+      generated.STORAGE_DRIVER = "local";
+      if (existing.STORAGE_LOCAL_DIR === undefined && !generated.STORAGE_LOCAL_DIR) {
+        generated.STORAGE_LOCAL_DIR = "./.local-storage";
+      }
+    }
+
     // If no example existed but a backend is in play, seed core vars + a
     // zero-service SQLite DB (safe default; the app can override in its own .env).
     if (!keys.length && scope.features.some((f) => f.agents.includes("backend"))) {
@@ -306,6 +318,16 @@ export class Orchestrator {
       await sh("sleep 4", { cwd, timeoutMs: 8_000 }); // brief wait for readiness
     } else if (needsService && !composeExists) {
       this.log("   ⚠ app declares a server-based datastore but ships no docker-compose — it may need an external service");
+    }
+
+    // 2b. Object storage: create the local upload dir the forced `local` driver
+    //     writes to, and gitignore it. Verification uploads land here — the
+    //     user's real R2/S3 bucket is never touched or billed.
+    if (usesObjectStorage(keys)) {
+      const dir = (existing.STORAGE_LOCAL_DIR ?? generated.STORAGE_LOCAL_DIR ?? "./.local-storage").replace(/^\.\//, "");
+      mkdirSync(join(cwd, dir), { recursive: true });
+      await sh(`grep -qxF '${dir}' .gitignore 2>/dev/null || echo '${dir}' >> .gitignore`, { cwd, timeoutMs: 8_000 });
+      this.log(`   storage: local dir ./${dir} for testing ✓ (your R2/S3 bucket is untouched)`);
     }
 
     // 3. Run migrations + seed, using whatever scripts the project defines.
@@ -422,6 +444,8 @@ export class Orchestrator {
       `4. Write DEPLOY.md: precise step-by-step instructions the user follows to deploy (accounts to create, buttons/commands, which secrets to set where).`,
       `5. Add a deploy-on-push CD workflow that uses secrets the USER adds to their repo settings (reference them by name; never embed a real value).`,
       ``,
+      `COST GOAL: keep the user's deployment cost at $0. For each component pick a platform with a genuine, current free tier, and in DEPLOY.md document that tier's limits and the usage point where the user would start paying.`,
+      `If the app uses object storage (images/PDFs/video), default the production target to Cloudflare R2 (10 GB free, zero egress) and document the STORAGE_* production vars (STORAGE_ENDPOINT/STORAGE_BUCKET/STORAGE_ACCESS_KEY_ID/STORAGE_SECRET_ACCESS_KEY) as required secrets.`,
       `Production database + third-party keys are the user's to supply — document them as required secrets/connection strings in DEPLOY.md; never invent or commit values.`,
       `Write a summary to .workflow/reports/deploy.md.`,
     ].join("\n"));
