@@ -138,6 +138,7 @@ webdev "build a blog" -m greenfield -t ./my-blog --fast
 | `-c, --concurrency <n>` | `3` | How many agents run at once. |
 | `--fast` | off | Skip the browser-test + visual-review phases for a quicker (less thorough) pass. |
 | `--no-git` | off | Don't create branches or commits — build everything in place. |
+| `--no-deploy` | off | Skip the deploy phase — no deploy config, `DEPLOY.md`, or CD workflow. |
 | `-y, --yes` | off | Non-interactive: don't prompt for anything (secrets get mocked). Good for scripts/CI. |
 | `--model-<lane> <id>` | — | Advanced: set one role's model, e.g. `--model-build claude-opus-4-8`. |
 | `--model <id>` | — | Advanced: one model for everything (only with `--preset solo`). |
@@ -205,15 +206,16 @@ Before testing, the tool makes the app bootable by filling in `.env`, handling v
 - **External secrets** — Stripe/OpenAI/SMTP keys. It asks you once (hidden input) and writes them straight to `.env`; skipped ones get mocked in tests. `.env` is always git-ignored.
 - **Object storage** — apps that handle uploads (images, PDFs, video) use an S3-compatible bucket in production (Cloudflare R2 by default). For testing, the harness forces a local filesystem driver and creates a git-ignored local directory, so verification never touches — or bills — your real bucket (the same principle as never testing against a remote database).
 
-### Deployment — the app comes out deploy-ready
+### Deployment — it ships the app for you
 
 After a build passes the quality gate (greenfield and iteration modes), a dedicated **deploy phase** runs. Because it sees the *finished* app, the devops agent can do the part that's normally a headache — connecting a separately-deployed frontend and backend. Its goal is to keep your deployment cost at **$0**: for every component it picks a platform with a genuine free tier and documents that tier's limits (and where you'd start paying) in `DEPLOY.md`. It:
 - **Picks a target per component** from the actual stack — a free-tier static/edge host for the frontend (Cloudflare Pages, Vercel Hobby, Netlify…), a free-tier container/serverless host for a standalone backend (the Dockerfile runs on Cloudflare Workers/Fly/Render/any VM), a managed provider **matched to the database the app actually uses** (Postgres → Neon/Supabase, Mongo → Atlas, Redis → Upstash, and so on — no Postgres-by-reflex), and object storage on Cloudflare R2. It chooses; it doesn't ask.
 - **Wires them together** — sets the frontend's API base URL to the backend's deployed URL, configures CORS, and lists exactly which env vars each side needs in each environment.
 - **Writes `DEPLOY.md`** — an ordered, do-this-then-that walkthrough (accounts, commands/clicks, which secret goes where).
 - **Sets up CD** — a deploy-on-push workflow that uses secrets *you* add to your repo settings.
+- **Deploys it** — the devops agent also writes a machine-readable recipe (`.workflow/deploy-plan.yaml`), and the harness runs it: it shows you the plan, asks you for the needed cloud tokens (hidden input), then runs each platform's CLI in order and prints the live URLs.
 
-**The boundary:** it generates config and instructions only. It never runs a deploy and never touches your cloud credentials — the production database URL and third-party keys are yours to supply, documented in `DEPLOY.md` as required secrets. So the app is "deploy-ready in one guided step," not "deployed for you."
+**The credential boundary:** the AI agent only *plans* the deploy — it never sees a cloud credential. The harness itself (plain code, not a model) collects your tokens via masked prompt and injects them straight into each CLI, so no secret ever enters an agent's context or transcript. Pass `--no-deploy` to skip the phase entirely. If the run is non-interactive (`-y`), a required CLI isn't installed, or you decline to enter tokens, it falls back to generating the config + `DEPLOY.md` for you to run yourself — nothing is deployed without your credentials.
 
 ### Memory — it learns across builds
 

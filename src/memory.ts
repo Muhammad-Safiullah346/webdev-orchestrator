@@ -13,7 +13,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, append
 import { homedir } from "node:os";
 import { join } from "node:path";
 import YAML from "yaml";
-import type { Scope } from "./types.ts";
+import type { DeployPlan, Scope } from "./types.ts";
 
 export const WORKFLOW_DIR = ".workflow";
 const VAULT_DIR = join(homedir(), ".claude", "webdev-memory");
@@ -74,6 +74,7 @@ export class Memory {
   get scopePath() { return join(this.root, "scope.yaml"); }
   get registryPath() { return join(this.root, "semantic-registry.yaml"); }
   get contractsPath() { return join(this.root, "api-contracts.yaml"); }
+  get deployPlanPath() { return join(this.root, "deploy-plan.yaml"); }
   get designSystemDir() { return join(this.root, "design-system"); }
 
   // -- state --------------------------------------------------------------
@@ -133,6 +134,11 @@ export class Memory {
     return existsSync(this.scopePath) ? readYaml<Scope | null>(this.scopePath, null) : null;
   }
   writeScope(scope: Scope): void { writeYaml(this.scopePath, scope); }
+
+  // -- deploy plan (devops writes the machine-readable recipe; code runs it) --
+  readDeployPlan(): DeployPlan | null {
+    return existsSync(this.deployPlanPath) ? readYaml<DeployPlan | null>(this.deployPlanPath, null) : null;
+  }
 
   // -- design-system readiness (designer publishes registry + contracts) --
   refreshReadiness(): void {

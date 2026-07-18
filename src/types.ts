@@ -55,6 +55,39 @@ export interface Scope {
   notes?: string[];
 }
 
+/** One deployable component in the machine-readable deploy recipe the devops
+ *  agent writes to `.workflow/deploy-plan.yaml`. The agent PLANS (picks the
+ *  platform + CLI + ordered steps); deterministic code EXECUTES it, injecting
+ *  collected credentials into the child process. Secret VALUES never appear
+ *  here — only their names, so code knows what to prompt for (masked). */
+export interface DeployComponent {
+  /** Logical piece, e.g. "database" | "backend" | "frontend" | "storage". */
+  name: string;
+  /** Human label for the chosen platform, e.g. "neon", "fly", "cloudflare-pages". */
+  platform: string;
+  /** The CLI code must find installed before running this component's steps. */
+  cli: { tool: string; version_arg?: string };
+  /** Other component names that must deploy first (ordering + output wiring). */
+  needs?: string[];
+  /** Credential names to collect (masked) and inject into this step's env. */
+  secrets?: string[];
+  /** Env-var names (from collected secrets or prior components' `provides`)
+   *  to inject into the child process for this component's steps. */
+  env?: string[];
+  /** Env-var names this component emits (parsed from step stdout) for dependents. */
+  provides?: string[];
+  /** Ordered shell steps. `${VAR}` placeholders are resolved (via shellQuote)
+   *  from collected secrets + resolved `provides` before execution. */
+  steps: string[];
+}
+
+/** The deploy recipe: components + the union of credential names to prompt for. */
+export interface DeployPlan {
+  components: DeployComponent[];
+  /** Every credential the plan needs (name + purpose only — never a value). */
+  prompt_secrets?: { name: string; purpose?: string }[];
+}
+
 export interface ConductorScore {
   score: number; // 0-100
   breakdown: Record<string, number>;
@@ -77,6 +110,8 @@ export interface RunConfig {
   noGit: boolean;
   /** Skip the heavy E2E + visual-QA phases (fast mode). */
   fast: boolean;
+  /** Skip the deploy phase (no deploy config / DEPLOY.md / CD workflow). */
+  noDeploy: boolean;
   /** Auto-approve everything (non-interactive). */
   yes: boolean;
   /** Max parallel subagents in a feature wave. */

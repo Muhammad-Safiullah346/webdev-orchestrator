@@ -42,6 +42,7 @@ interface Flags {
   threshold: number;
   noGit: boolean;
   fast: boolean;
+  noDeploy: boolean;
   yes: boolean;
   concurrency: number;
 }
@@ -55,6 +56,7 @@ function parseArgs(argv: string[]): { request: string; flags: Flags } {
     threshold: 98,
     noGit: false,
     fast: false,
+    noDeploy: false,
     yes: false,
     concurrency: 3,
   };
@@ -84,6 +86,7 @@ function parseArgs(argv: string[]): { request: string; flags: Flags } {
       case "--concurrency": case "-c": flags.concurrency = clamp(Number(next()), 1, 16); break;
       case "--no-git": flags.noGit = true; break;
       case "--fast": flags.fast = true; break;
+      case "--no-deploy": flags.noDeploy = true; break;
       case "--yes": case "-y": flags.yes = true; break;
       case "--help": case "-h": printHelp(); process.exit(0);
       default:
@@ -222,6 +225,7 @@ async function main(): Promise<void> {
     threshold: flags.threshold,
     noGit: flags.noGit,
     fast: flags.fast,
+    noDeploy: flags.noDeploy,
     yes: flags.yes,
     concurrency: flags.concurrency,
   };
@@ -274,6 +278,7 @@ OPTIONS
   -c, --concurrency <n>    Max parallel agents per wave (default: 3)
       --fast               Skip E2E + visual-QA (quick pass)
       --no-git             Single-branch mode, no git orchestration
+      --no-deploy          Skip deploy phase (no deploy config, DEPLOY.md, or CD)
   -y, --yes                Non-interactive: auto-approve all tool use
   -h, --help
 

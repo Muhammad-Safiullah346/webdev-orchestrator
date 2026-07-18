@@ -26,6 +26,7 @@ import {
   bootstrapGit, buildGate, commitAll, createBranch, mergeToDevelop,
   releaseToMain, runtimeProbe, sh,
 } from "./verify.ts";
+import { collectDeploySecrets, executeDeployPlan, preflightClis } from "./deploy.ts";
 
 // Retry ceilings before escalating to the user.
 const RETRY = { feature: 3, runtime: 5, e2e: 5, conductor: 3, bugfix: 3 };
@@ -131,8 +132,9 @@ export class Orchestrator {
 
     // 9. Deploy config — only for a passing build. Runs on the FINISHED app so
     // devops can wire frontend↔backend and produce coherent deploy artifacts.
-    if (passed && this.plan.deploy && !this.plan.analysisOnly) {
+    if (passed && this.plan.deploy && !this.cfg.noDeploy && !this.plan.analysisOnly) {
       await this.phaseDeploy(scope);
+      await this.phaseDeployExecute(scope);
     }
 
     // 10. Release
@@ -443,6 +445,7 @@ export class Orchestrator {
       `3. WIRE THEM: set the frontend's API base URL to the backend's deployed URL, configure CORS, and list the exact env vars each side needs in each environment.`,
       `4. Write DEPLOY.md: precise step-by-step instructions the user follows to deploy (accounts to create, buttons/commands, which secrets to set where).`,
       `5. Add a deploy-on-push CD workflow that uses secrets the USER adds to their repo settings (reference them by name; never embed a real value).`,
+      `6. Write .workflow/deploy-plan.yaml — a MACHINE-READABLE recipe so the harness can run the deploy itself: per component, the CLI tool, ordered idempotent shell steps (\${VAR} placeholders), the credential NAMES it needs (secrets), the env it consumes, its needs (ordering), and what it provides. Put NO secret VALUES in it — names only. See the devops prompt for the exact shape.`,
       ``,
       `COST GOAL: keep the user's deployment cost at $0. For each component pick a platform with a genuine, current free tier, and in DEPLOY.md document that tier's limits and the usage point where the user would start paying.`,
       `If the app uses object storage (images/PDFs/video), default the production target to Cloudflare R2 (10 GB free, zero egress) and document the STORAGE_* production vars (STORAGE_ENDPOINT/STORAGE_BUCKET/STORAGE_ACCESS_KEY_ID/STORAGE_SECRET_ACCESS_KEY) as required secrets.`,
@@ -450,6 +453,58 @@ export class Orchestrator {
       `Write a summary to .workflow/reports/deploy.md.`,
     ].join("\n"));
     this.log("");
+  }
+
+  /** Code-driven deploy: run the recipe the devops agent wrote, collecting cloud
+   *  credentials via masked prompt (never sent to any agent). Falls back to
+   *  config-only (today's behavior) when it can't run safely. */
+  private async phaseDeployExecute(scope: Scope): Promise<void> {
+    const plan = this.mem.readDeployPlan();
+    if (!plan || !(plan.components?.length)) {
+      this.log("   deploy: no runnable plan — config + DEPLOY.md are ready for you to run.\n");
+      return;
+    }
+
+    // No TTY / -y: we can't collect credentials safely → leave it to the user.
+    if (!isInteractive(this.cfg.yes)) {
+      this.log("   deploy: non-interactive run — config + DEPLOY.md are ready; run the deploy yourself.\n");
+      return;
+    }
+
+    // Every required CLI must be installed, or we'd fail mid-deploy.
+    const missing = preflightClis(plan);
+    if (missing.length) {
+      const list = missing.map((m) => `${m.tool} (${m.platform})`).join(", ");
+      this.log(`   deploy: missing CLI(s): ${list}. Install them, then follow DEPLOY.md — skipping auto-deploy.\n`);
+      return;
+    }
+
+    // Show exactly what will happen before asking for anything.
+    this.log("🚢 Ready to deploy this app for you:");
+    for (const c of plan.components) this.log(`     • ${c.name} → ${c.platform}`);
+    const credNames = (plan.prompt_secrets ?? []).map((s) => s.name);
+    this.log(credNames.length
+      ? `   I'll ask you for: ${credNames.join(", ")} (hidden input; never sent to any AI agent).`
+      : `   No credentials required (using values already in your environment).`);
+
+    const secrets = await collectDeploySecrets(plan, false);
+    if (secrets === null) {
+      this.log("   deploy: no credentials provided — skipping auto-deploy; DEPLOY.md has the manual steps.\n");
+      return;
+    }
+
+    this.mem.setPhase("deploy-execute");
+    this.log("   deploying…");
+    const outcome = await executeDeployPlan(plan, this.cfg.target, secrets, (l) => this.log(l));
+    if (outcome.ok) {
+      this.log("   ✅ deployed:");
+      for (const d of outcome.deployed) this.log(`     • ${d.name} (${d.platform})${d.url ? ` → ${d.url}` : ""}`);
+      this.log("");
+    } else {
+      const f = outcome.failed;
+      this.log(`   ⚠ deploy stopped at ${f?.name} (${f?.platform}). ${f?.detail ?? ""}`);
+      this.log("   The rest is documented in DEPLOY.md so you can finish manually.\n");
+    }
   }
 
   private async phaseVisualQa(): Promise<void> {

@@ -190,7 +190,7 @@ export async function promptForSecrets(vars: EnvVar[]): Promise<Record<string, s
   return collected;
 }
 
-function maskedQuestion(prompt: string): Promise<string> {
+export function maskedQuestion(prompt: string): Promise<string> {
   return new Promise((resolve) => {
     const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
     // Mute echo: replace what's written after the prompt with nothing.

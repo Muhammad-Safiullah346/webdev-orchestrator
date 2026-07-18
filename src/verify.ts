@@ -11,20 +11,27 @@ import type { PhaseResult } from "./types.ts";
 
 const exec = promisify(execFile);
 
-interface RunOpts { cwd: string; timeoutMs?: number; }
+interface RunOpts {
+  cwd: string;
+  timeoutMs?: number;
+  /** Extra env vars merged over process.env for the child — lets deterministic
+   *  code inject collected deploy credentials into a CLI without writing them to
+   *  disk or passing them through any agent's context. */
+  env?: NodeJS.ProcessEnv;
+}
 
 /** Run a shell command, never throwing — returns code/stdout/stderr. */
 export async function run(
   cmd: string,
   args: string[],
-  { cwd, timeoutMs = 120_000 }: RunOpts,
+  { cwd, timeoutMs = 120_000, env }: RunOpts,
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   try {
     const { stdout, stderr } = await exec(cmd, args, {
       cwd,
       timeout: timeoutMs,
       maxBuffer: 10 * 1024 * 1024,
-      env: process.env,
+      env: env ? { ...process.env, ...env } : process.env,
     });
     return { code: 0, stdout, stderr };
   } catch (err: any) {
@@ -207,6 +214,6 @@ function tail(s: string, n: number): string {
   return s.length > n ? "…" + s.slice(-n) : s;
 }
 
-function shellQuote(s: string): string {
+export function shellQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
