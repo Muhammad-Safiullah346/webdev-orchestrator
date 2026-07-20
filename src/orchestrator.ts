@@ -23,8 +23,8 @@ import {
   type EnvVar,
 } from "./env.ts";
 import {
-  bootstrapGit, buildGate, commitAll, createBranch, mergeToDevelop,
-  releaseToMain, runtimeProbe, sh,
+  abortMerge, bootstrapGit, buildGate, commitAll, completeMerge, conflictedFiles,
+  createBranch, mergeToDevelop, releaseToMain, runtimeProbe, sh,
 } from "./verify.ts";
 import { collectDeploySecrets, executeDeployPlan, preflightClis } from "./deploy.ts";
 
@@ -130,15 +130,22 @@ export class Orchestrator {
 
     const passed = !score || score.decision === "pass";
 
+    // An unresolved merge conflict means develop is clean but missing a feature.
+    // Deploying or tagging now would ship an incomplete app — block both.
+    const incomplete = this.mem.hasUnresolvedConflicts();
+    if (incomplete) {
+      this.log("\n⛔ Unresolved merge conflict(s) — skipping deploy and release so nothing incomplete ships.");
+    }
+
     // 9. Deploy config — only for a passing build. Runs on the FINISHED app so
     // devops can wire frontend↔backend and produce coherent deploy artifacts.
-    if (passed && this.plan.deploy && !this.cfg.noDeploy && !this.plan.analysisOnly) {
+    if (passed && !incomplete && this.plan.deploy && !this.cfg.noDeploy && !this.plan.analysisOnly) {
       await this.phaseDeploy(scope);
       await this.phaseDeployExecute(scope);
     }
 
     // 10. Release
-    if (passed && !this.cfg.noGit && !this.plan.analysisOnly) {
+    if (passed && !incomplete && !this.cfg.noGit && !this.plan.analysisOnly) {
       const tag = nextTag(scope);
       await releaseToMain(this.cfg.target, tag);
       this.log(`\n🚢 merged develop → main, tagged ${tag}`);
@@ -153,6 +160,25 @@ export class Orchestrator {
         iterations: this.mem.readState()?.iterations ?? 1,
         issues: score.blocking_issues.map((b) => b.dimension),
       });
+    }
+
+    // An unresolved conflict means the build is INCOMPLETE regardless of the
+    // gate score — a feature is quarantined and nothing was deployed/released.
+    if (incomplete) {
+      const conflicts = this.mem.readState()?.unresolved_conflicts ?? [];
+      const names = conflicts.map((c) => c.feature).join(", ");
+      this.log(`\n⚠ Build INCOMPLETE — unresolved conflict(s) left unmerged: ${names}.`);
+      for (const c of conflicts) {
+        this.log(`   • ${c.feature} on ${c.branch} (files: ${c.files.join(", ")})`);
+      }
+      this.log("   develop is clean but missing the above; nothing was deployed or released.");
+      this.log("   Resolve per .workflow/decisions/merge-conflict-*.md, then re-run to release.");
+      this.mem.setPhase("incomplete");
+      return {
+        ok: false,
+        score: score?.score,
+        summary: `Build incomplete — ${conflicts.length} feature(s) unmerged after merge conflicts (${names}). develop is clean; not deployed or released. See .workflow/decisions/.`,
+      };
     }
 
     this.mem.setPhase(passed ? "done" : "incomplete");
@@ -215,8 +241,15 @@ export class Orchestrator {
 
     if (!this.cfg.noGit) {
       await commitAll(this.cfg.target, `feat(${feature.name}): complete feature`);
+      const merge = await mergeToDevelop(this.cfg.target, feature.branch);
+      if (!merge.ok) {
+        // Conflict: try agent resolution (B); if that fails, abort so develop
+        // stays clean and quarantine the feature (option b — keep building the
+        // rest; deploy + release are blocked at the end).
+        const resolved = await this.resolveMergeConflict(feature, merge.conflicts);
+        if (!resolved) return; // quarantined + recorded inside resolveMergeConflict
+      }
       // Post-merge smoke test: build must still pass.
-      await mergeToDevelop(this.cfg.target, feature.branch);
       const smoke = await buildGate(this.cfg.target);
       if (!smoke.ok) {
         this.log(`     ⚠ smoke test failed after merging ${feature.name} — dispatching bugfix`);
@@ -224,6 +257,66 @@ export class Orchestrator {
       }
       this.mem.markFeatureMerged(feature.name);
     }
+  }
+
+  /** Resolve a merge conflict via the bugfix agent under its conflict protocol,
+   *  then complete the merge and smoke-build. One attempt, no loop. On failure,
+   *  abort the merge (develop stays clean), quarantine the feature on its branch,
+   *  record a recovery note, and escalate — the run continues but deploy +
+   *  release are blocked. Returns true only if the merge actually completed. */
+  private async resolveMergeConflict(feature: Feature, conflicts: string[]): Promise<boolean> {
+    this.log(`     ⚠ merge conflict in ${feature.name}: ${conflicts.join(", ")} — attempting resolution`);
+    const scope = this.mem.readScope();
+    const featureLines = (scope?.features ?? [])
+      .map((f) => `  - ${f.name}: ${f.description}`).join("\n");
+    await this.runAgent("bugfix", [
+      `MERGE CONFLICT while merging branch "${feature.branch}" into develop. Follow your merge-conflict protocol.`,
+      `Conflicted files (contain <<<<<<< ours / >>>>>>> theirs markers):`,
+      ...conflicts.map((f) => `  - ${f}`),
+      ``,
+      `"ours" = develop (features already merged); "theirs" = the incoming feature "${feature.name}".`,
+      `Reconcile so BOTH sides' behavior survives. Honor .workflow/api-contracts.yaml and .workflow/semantic-registry.yaml.`,
+      `All features in this build:\n${featureLines}`,
+      ``,
+      `Remove every conflict marker. If genuinely irreconcilable, say so explicitly and STOP — do NOT drop either side to make it build.`,
+    ].join("\n"));
+
+    // Did the agent clear every marker? Any remaining conflicted file = failure.
+    const stillConflicted = await conflictedFiles(this.cfg.target);
+    if (stillConflicted.length === 0) {
+      await completeMerge(this.cfg.target, `merge(${feature.name}): resolve conflict into develop`);
+      const smoke = await buildGate(this.cfg.target);
+      if (smoke.ok) {
+        this.log(`     ✓ conflict resolved and merged (${feature.name})`);
+        return true;
+      }
+      this.log(`     ⚠ resolution built markers away but the smoke build failed — treating as unresolved`);
+    }
+
+    // Unresolved: abort → develop clean; quarantine + record + escalate.
+    await abortMerge(this.cfg.target);
+    this.mem.markConflictUnresolved(feature.name, feature.branch, conflicts);
+    this.mem.recordDecision(`merge-conflict-${slug(feature.name)}`, [
+      `# Unresolved merge conflict: ${feature.name}`,
+      ``,
+      `The feature is committed on **${feature.branch}** but NOT merged — develop is clean but missing it.`,
+      ``,
+      `## Conflicting files`,
+      ...conflicts.map((f) => `- ${f}`),
+      ``,
+      `## To finish later`,
+      "```bash",
+      `git checkout develop && git merge ${feature.branch}`,
+      `# resolve the conflicts, then:`,
+      `git add -A && git commit`,
+      "```",
+      ``,
+      `⚠ Any release cut without this feature is INCOMPLETE — re-tag after merging it.`,
+      ``,
+      `Time: ${new Date().toISOString()}`,
+    ].join("\n"));
+    await this.escalate("merge-conflict", `${feature.name} left unmerged (conflict in ${conflicts.join(", ")}). develop is clean; deploy + release blocked.`);
+    return false;
   }
 
   /** Collect external secrets once, up front (code-driven, masked, never logged). */
@@ -683,7 +776,24 @@ export class Orchestrator {
     await this.runAgent("bugfix", task);
     if (!this.cfg.noGit) {
       await commitAll(this.cfg.target, `fix(${slug(slugName)}): targeted bugfix`);
-      await mergeToDevelop(this.cfg.target, branch);
+      const merge = await mergeToDevelop(this.cfg.target, branch);
+      if (!merge.ok) {
+        // A bugfix that conflicts must not corrupt develop. Abort → develop
+        // clean; record it (blocks deploy + release) so it can't ship silently.
+        await abortMerge(this.cfg.target);
+        this.mem.markConflictUnresolved(branch, branch, merge.conflicts);
+        this.mem.recordDecision(`merge-conflict-${slug(slugName)}`, [
+          `# Unresolved conflict merging bugfix ${branch}`,
+          ``,
+          `Committed on **${branch}** but not merged — develop is clean without it.`,
+          `Conflicting files:`,
+          ...merge.conflicts.map((f) => `- ${f}`),
+          ``,
+          `Finish: \`git checkout develop && git merge ${branch}\`, resolve, commit.`,
+          `Time: ${new Date().toISOString()}`,
+        ].join("\n"));
+        await this.escalate("merge-conflict", `bugfix ${branch} left unmerged (conflict in ${merge.conflicts.join(", ")}). develop clean; deploy + release blocked.`);
+      }
     }
   }
 

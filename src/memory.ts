@@ -52,6 +52,9 @@ export interface BuildState {
   design_system_ready: boolean;
   agents: Record<string, "pending" | "in_progress" | "complete" | "failed">;
   features_merged: string[];
+  /** Features left unmerged after an unresolved merge conflict (quarantined on
+   *  their own branch). A non-empty list blocks deploy + release. */
+  unresolved_conflicts?: { feature: string; branch: string; files: string[] }[];
   iterations: number;
 }
 
@@ -100,6 +103,7 @@ export class Memory {
       design_system_ready: false,
       agents: {},
       features_merged: [],
+      unresolved_conflicts: [],
       iterations: 0,
     };
     // Refresh identifying fields on resume.
@@ -127,6 +131,22 @@ export class Memory {
     if (!s) return;
     if (!s.features_merged.includes(feature)) s.features_merged.push(feature);
     this.writeState(s);
+  }
+
+  /** Record a feature left unmerged after an unresolved conflict (quarantined
+   *  on its branch). Idempotent per feature. Blocks deploy + release. */
+  markConflictUnresolved(feature: string, branch: string, files: string[]): void {
+    const s = this.readState();
+    if (!s) return;
+    s.unresolved_conflicts ??= [];
+    if (!s.unresolved_conflicts.some((c) => c.feature === feature)) {
+      s.unresolved_conflicts.push({ feature, branch, files });
+    }
+    this.writeState(s);
+  }
+
+  hasUnresolvedConflicts(): boolean {
+    return (this.readState()?.unresolved_conflicts?.length ?? 0) > 0;
   }
 
   // -- scope --------------------------------------------------------------

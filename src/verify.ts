@@ -196,9 +196,35 @@ export async function commitAll(cwd: string, message: string): Promise<void> {
   await sh(`git commit -m ${shellQuote(message)} --no-verify`, { cwd }); // no-op if nothing staged
 }
 
-export async function mergeToDevelop(cwd: string, branch: string): Promise<void> {
+/** Merge a feature branch into develop. Reports the outcome instead of
+ *  swallowing it: on a conflict the caller decides whether to attempt
+ *  resolution or abort — we never leave develop silently mid-merge. */
+export async function mergeToDevelop(
+  cwd: string,
+  branch: string,
+): Promise<{ ok: boolean; conflicts: string[] }> {
   await run("git", ["checkout", "develop"], { cwd });
-  await run("git", ["merge", branch, "--no-edit", "--no-verify"], { cwd });
+  const res = await run("git", ["merge", branch, "--no-edit", "--no-verify"], { cwd });
+  if (res.code === 0) return { ok: true, conflicts: [] };
+  return { ok: false, conflicts: await conflictedFiles(cwd) };
+}
+
+/** Files currently in a conflicted (unmerged) state. */
+export async function conflictedFiles(cwd: string): Promise<string[]> {
+  const r = await run("git", ["diff", "--name-only", "--diff-filter=U"], { cwd });
+  return r.stdout.split("\n").map((l) => l.trim()).filter(Boolean);
+}
+
+/** Abort an in-progress merge, restoring the branch to its pre-merge state.
+ *  Safe no-op if there is no merge in progress. */
+export async function abortMerge(cwd: string): Promise<void> {
+  await run("git", ["merge", "--abort"], { cwd });
+}
+
+/** Finish a merge after conflicts have been resolved in the working tree. */
+export async function completeMerge(cwd: string, message: string): Promise<void> {
+  await run("git", ["add", "-A"], { cwd });
+  await sh(`git commit -m ${shellQuote(message)} --no-verify`, { cwd });
 }
 
 export async function releaseToMain(cwd: string, tag: string): Promise<void> {
