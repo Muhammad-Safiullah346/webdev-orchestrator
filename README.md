@@ -165,6 +165,8 @@ discovery → [feature waves: designer → backend → frontend → docs/devops]
 
 Each agent runs as its **own** AI session with a fresh context and only the tools it needs — so the reviewer isn't the same context that wrote the code, and quality doesn't degrade from one overloaded session juggling everything.
 
+Features are built on isolated `feature/*` branches and merged into `develop` only when they build. If two features conflict on merge, the tool tries to reconcile them (via the `bugfix` agent, preserving both sides); if it can't, it **aborts cleanly so `develop` is never left broken**, quarantines the unmerged feature on its branch with recovery notes, and **blocks deploy and release** rather than shipping an incomplete app — the run ends in a clearly-reported incomplete state instead of a silent success.
+
 ### The 14 agents
 
 `discovery` `designer` `frontend` `backend` `docs` `devops` `qa` `security` `code-review` `performance` `e2e` `visual-qa` `bugfix` `conductor`.
